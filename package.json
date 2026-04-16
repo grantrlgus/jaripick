@@ -1,0 +1,36 @@
+{
+  "name": "carpark",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "import:kapt": "dotenv -e .env.local -- tsx scripts/import-kapt.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.44.4",
+    "clsx": "^2.1.1",
+    "next": "14.2.5",
+    "next-auth": "^5.0.0-beta.25",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwind-merge": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "dotenv-cli": "^7.4.2",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.7.2",
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
+  }
+}
