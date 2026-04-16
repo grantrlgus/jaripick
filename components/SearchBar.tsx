@@ -51,7 +51,7 @@ export default function SearchBar({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 placeholder:text-gray-400"
+          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-base text-gray-800 shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100 placeholder:text-gray-400"
         />
       </div>
       <button
