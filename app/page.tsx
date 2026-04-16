@@ -58,7 +58,7 @@ export default async function LandingPage() {
           <p className="mb-5 text-center text-xs text-gray-500">
             단지 이름을 검색하고 관심을 표시해보세요
           </p>
-          <SearchBar className="w-full" placeholder="아파트 이름 검색..." />
+          <SearchBar className="w-full" placeholder="단지 이름 검색..." />
           <p className="mt-3 text-center text-xs text-gray-400">
             로그인 없이 클릭 한 번으로 완료돼요
           </p>

@@ -26,7 +26,7 @@ export default function RootLayout({
         <Header />
         <main>{children}</main>
         <footer className="mt-20 border-t border-gray-100 bg-white py-10 text-center text-sm text-gray-400">
-          <p>자리픽은 입주민의 관심을 확인하는 단계의 서비스입니다.</p>
+          <p>아직 시작 단계예요. 관심이 모이면 우리 단지도 가능해져요.</p>
           <p className="mt-1">© 2025 자리픽. All rights reserved.</p>
         </footer>
       </body>

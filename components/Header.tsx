@@ -7,7 +7,7 @@ export default function Header() {
         <Link href="/" className="flex items-center gap-2">
           <span className="text-lg font-bold text-primary-600">자리픽</span>
           <span className="hidden text-sm text-gray-400 sm:inline">
-            우리 단지 주차 구역 신청
+            딱 맞는 자리, 직접 신청하세요
           </span>
         </Link>
       </div>
