@@ -12,7 +12,7 @@ export default function ShareButton({ apartmentName, participantCount }: Props) 
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: "카파크", text, url });
+        await navigator.share({ title: "자리픽", text, url });
       } catch {
         // User cancelled share
       }

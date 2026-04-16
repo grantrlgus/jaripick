@@ -98,7 +98,7 @@ export default function InterestButtons({
       </button>
 
       <p className="text-center text-xs text-gray-400">
-        로그인 없이 클릭 한 번으로 완료돼요
+        클릭 한 번으로 완료돼요
       </p>
 
       {error && (
