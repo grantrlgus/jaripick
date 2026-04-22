@@ -1,13 +1,112 @@
 // Extra screens: Notifications, Settings, Payment, ReBidCancel, Error, FAQ
 
 function NotificationsScreen({ go }) {
-  const notifs = [
-    { t: '🎉 낙찰됐어요!', d: 'A-23 구역에 180,000원으로 확정됐어요', w: '방금 전', unread: true, action: 'cert' },
-    { t: '⚠️ 순위가 밀렸어요', d: 'B-07 구역 · 140,000원이 최고가가 됐어요', w: '1시간 전', unread: true, action: 'bid' },
-    { t: '🏆 현재 1위예요', d: 'A-23 구역 · 3명 중 1위', w: '3시간 전', unread: false, action: 'detail' },
-    { t: '✅ 입주민 승인 완료', d: '오금현대 101동 1201호', w: '어제', unread: false, action: null },
-    { t: '📢 2026년 5월 라운드 시작', d: '124개 구역 중 96칸 입찰 가능', w: '3일 전', unread: false, action: 'list' },
-  ];
+  const [notifs, setNotifs] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const creds = React.useMemo(() => {
+    try {
+      return {
+        dong: localStorage.getItem('jp_dong') || '',
+        ho: localStorage.getItem('jp_ho') || '',
+        requestId: localStorage.getItem('jp_request_id') || '',
+        complexName: localStorage.getItem('jp_complex_name') || '오금현대',
+      };
+    } catch { return { dong: '', ho: '', requestId: '', complexName: '오금현대' }; }
+  }, []);
+
+  const relTime = (iso) => {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return '방금 전';
+    if (m < 60) return `${m}분 전`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}시간 전`;
+    const d = Math.floor(h / 24);
+    if (d < 7) return `${d}일 전`;
+    return new Date(iso).toISOString().slice(0, 10);
+  };
+
+  React.useEffect(() => {
+    (async () => {
+      if (!creds.dong || !creds.ho) { setLoading(false); return; }
+      const list = [];
+      const [rounds, cells, req] = await Promise.all([
+        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        creds.requestId
+          ? fetch(`/api/residents/requests/${creds.requestId}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+          : Promise.resolve(null),
+      ]);
+      const cellById = {};
+      (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
+
+      if (req && req.status === 'approved') {
+        list.push({
+          ts: req.decided_at || req.created_at,
+          t: '✅ 입주민 승인 완료',
+          d: `${creds.complexName} ${creds.dong}동 ${creds.ho}호`,
+          action: null,
+        });
+      } else if (req && req.status === 'rejected') {
+        list.push({
+          ts: req.decided_at || req.created_at,
+          t: '⚠️ 입주민 승인 거절',
+          d: '관리자에게 문의해주세요',
+          action: null,
+        });
+      }
+
+      for (const r of (Array.isArray(rounds) ? rounds : [])) {
+        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        if (!detail) continue;
+        const perCell = detail.per_cell || {};
+        const myBidsByCell = {};
+        (detail.bids || []).forEach(b => {
+          if (b.dong !== creds.dong || b.ho !== creds.ho) return;
+          const cur = myBidsByCell[b.cell_id];
+          if (!cur || new Date(b.created_at) > new Date(cur.created_at)) myBidsByCell[b.cell_id] = b;
+        });
+        for (const [cid, myBid] of Object.entries(myBidsByCell)) {
+          const entry = perCell[cid];
+          const c = cellById[cid];
+          const spot = c ? `${c.row}-${c.n}` : cid;
+          const isTop = entry && entry.top.dong === creds.dong && entry.top.ho === creds.ho;
+          const uniq = entry ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 1;
+          if (r.status === 'finalized' && isTop) {
+            list.push({
+              ts: r.updated_at || r.bid_end || myBid.created_at,
+              t: '🎉 낙찰됐어요!',
+              d: `${spot} 구역에 ${entry.top.amount.toLocaleString()}원으로 확정됐어요`,
+              action: 'cert',
+            });
+          } else if (r.status === 'live' && isTop) {
+            list.push({
+              ts: myBid.created_at,
+              t: '🏆 현재 1위예요',
+              d: `${spot} 구역 · ${uniq}명 중 1위`,
+              action: 'detail',
+              spot,
+            });
+          } else if (r.status === 'live' && !isTop) {
+            list.push({
+              ts: entry?.top?.created_at || myBid.created_at,
+              t: '⚠️ 순위가 밀렸어요',
+              d: `${spot} 구역 · ${entry.top.amount.toLocaleString()}원이 최고가가 됐어요`,
+              action: 'bid',
+              spot,
+            });
+          }
+        }
+      }
+
+      list.sort((a, b) => (new Date(b.ts).getTime() || 0) - (new Date(a.ts).getTime() || 0));
+      setNotifs(list);
+      setLoading(false);
+    })();
+  }, [creds]);
+
   return (
     <JPScreen>
       <JPHeader left={
@@ -15,22 +114,24 @@ function NotificationsScreen({ go }) {
           <button onClick={() => go('home')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button>
           <div style={{ fontSize: 18, fontWeight: 700 }}>알림</div>
         </div>
-      } right={
-        <button style={{ padding: '6px 10px', background: 'transparent', border: 0, fontSize: 12, color: C.primary, fontWeight: 600, cursor: 'pointer', fontFamily: jpFont }}>모두 읽음</button>
       } />
+      {!loading && notifs.length === 0 && (
+        <div style={{ padding: '40px 20px' }}>
+          <JPEmptyState emoji="🔔" message={"아직 알림이 없어요."} />
+        </div>
+      )}
       <div style={{ padding: '8px 20px 100px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {notifs.map((n, i) => (
-          <div key={i} onClick={() => n.action && go(n.action, { spot: 'A-23' })} style={{
-            background: n.unread ? C.primaryLight : C.white, borderRadius: 12, padding: 14,
+          <div key={i} onClick={() => n.action && go(n.action, n.spot ? { spot: n.spot } : {})} style={{
+            background: C.white, borderRadius: 12, padding: 14,
             cursor: n.action ? 'pointer' : 'default',
-            border: n.unread ? `1px solid ${C.primaryLight2}` : `1px solid ${C.n100}`,
+            border: `1px solid ${C.n100}`,
             display: 'flex', gap: 10,
           }}>
-            {n.unread && <div style={{ width: 8, height: 8, borderRadius: 4, background: C.primary, marginTop: 6, flexShrink: 0 }} />}
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{n.t}</div>
-                <div style={{ fontSize: 11, color: C.n400 }}>{n.w}</div>
+                <div style={{ fontSize: 11, color: C.n400 }}>{relTime(n.ts)}</div>
               </div>
               <div style={{ fontSize: 13, color: C.n500, marginTop: 4 }}>{n.d}</div>
             </div>
@@ -123,14 +224,79 @@ function SettingsScreen({ go }) {
 }
 
 function PaymentScreen({ go }) {
-  const total = 180000;
-  const months = 3;
-  const monthly = Math.round(total / months);
-  const schedule = [
-    { m: '2026년 5월', amt: monthly, when: '5월 관리비', status: 'upcoming' },
-    { m: '2026년 6월', amt: monthly, when: '6월 관리비', status: 'upcoming' },
-    { m: '2026년 7월', amt: monthly, when: '7월 관리비', status: 'upcoming' },
-  ];
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const creds = React.useMemo(() => {
+    try { return { dong: localStorage.getItem('jp_dong') || '', ho: localStorage.getItem('jp_ho') || '' }; }
+    catch { return { dong: '', ho: '' }; }
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      if (!creds.dong || !creds.ho) { setLoading(false); return; }
+      const [rounds, cells] = await Promise.all([
+        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const cellById = {};
+      (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
+      for (const r of (Array.isArray(rounds) ? rounds : []).filter(x => x.status === 'finalized')) {
+        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        const perCell = detail?.per_cell || {};
+        for (const [cid, e] of Object.entries(perCell)) {
+          if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
+            const c = cellById[cid];
+            setData({ spot: c ? `${c.row}-${c.n}` : cid, amount: e.top.amount, start: r.contract_start, end: r.contract_end });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      setLoading(false);
+    })();
+  }, [creds]);
+
+  if (loading) {
+    return (
+      <JPScreen bg={C.white}>
+        <JPHeader left={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => go('cert')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button><div style={{ fontSize: 18, fontWeight: 700 }}>결제 안내</div></div>} />
+        <div style={{ padding: 40, textAlign: 'center', color: C.n500, fontSize: 13 }}>불러오는 중…</div>
+      </JPScreen>
+    );
+  }
+
+  if (!data) {
+    return (
+      <JPScreen bg={C.white}>
+        <JPHeader left={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => go('cert')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button><div style={{ fontSize: 18, fontWeight: 700 }}>결제 안내</div></div>} />
+        <div style={{ padding: '40px 20px' }}>
+          <JPEmptyState emoji="💳" message={"확정된 구역이 없어요.\n낙찰 후 결제 안내가 표시됩니다."} />
+        </div>
+      </JPScreen>
+    );
+  }
+
+  const { spot, amount: total, start, end } = data;
+  let months = 1;
+  let schedule = [];
+  if (start && end) {
+    const s = new Date(start), e = new Date(end);
+    months = Math.max(1, Math.round((e - s) / (30 * 86400000)));
+    const monthly = Math.round(total / months);
+    const today = new Date();
+    for (let i = 0; i < months; i++) {
+      const m = new Date(s.getFullYear(), s.getMonth() + i, 1);
+      const monthEnd = new Date(s.getFullYear(), s.getMonth() + i + 1, 0);
+      let status = 'upcoming';
+      if (today > monthEnd) status = 'paid';
+      else if (today >= m && today <= monthEnd) status = 'due';
+      schedule.push({ m: `${m.getFullYear()}년 ${m.getMonth() + 1}월`, amt: monthly, when: `${m.getMonth() + 1}월 관리비`, status });
+    }
+  } else {
+    schedule = [{ m: '전체', amt: total, when: '관리비', status: 'upcoming' }];
+  }
+
   return (
     <JPScreen bg={C.white}>
       <JPHeader left={
@@ -143,7 +309,7 @@ function PaymentScreen({ go }) {
         <div style={{ background: C.primary, color: C.white, borderRadius: 12, padding: 18 }}>
           <div style={{ fontSize: 12, opacity: 0.8 }}>낙찰 금액</div>
           <div style={{ fontSize: 32, fontWeight: 900, marginTop: 4 }}>{total.toLocaleString()}원</div>
-          <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>A-23 · 2026-05-01 ~ 07-31 (3개월)</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>{spot}{start && end ? ` · ${start} ~ ${end} (${months}개월)` : ''}</div>
         </div>
 
         <div style={{
@@ -167,14 +333,17 @@ function PaymentScreen({ go }) {
               <div key={i} style={{
                 padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12,
                 borderTop: i === 0 ? 0 : `1px solid ${C.n100}`,
+                opacity: s.status === 'paid' ? 0.6 : 1,
               }}>
                 <div style={{
-                  width: 32, height: 32, borderRadius: 16, background: C.primaryLight,
-                  color: C.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, height: 32, borderRadius: 16,
+                  background: s.status === 'paid' ? C.successLight : s.status === 'due' ? C.warningLight : C.primaryLight,
+                  color: s.status === 'paid' ? C.success : s.status === 'due' ? '#92400E' : C.primary,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 13, fontWeight: 800,
-                }}>{i + 1}</div>
+                }}>{s.status === 'paid' ? '✓' : i + 1}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.m}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.m}{s.status === 'due' ? ' · 청구 중' : s.status === 'paid' ? ' · 완료' : ''}</div>
                   <div style={{ fontSize: 11, color: C.n500, marginTop: 1 }}>{s.when}에 포함</div>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.n900 }}>{s.amt.toLocaleString()}원</div>
@@ -206,8 +375,82 @@ function PaymentScreen({ go }) {
 }
 
 function ReBidCancelScreen({ go, state }) {
-  const spot = state.currentSpot || 'A-23';
+  const spot = state.currentSpot || '';
   const [confirm, setConfirm] = React.useState(false);
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [cancelling, setCancelling] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  const creds = React.useMemo(() => {
+    try { return { dong: localStorage.getItem('jp_dong') || '', ho: localStorage.getItem('jp_ho') || '' }; }
+    catch { return { dong: '', ho: '' }; }
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      if (!creds.dong || !creds.ho || !spot) { setLoading(false); return; }
+      const [rounds, cells] = await Promise.all([
+        fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
+      const cs = Array.isArray(cells) ? cells : [];
+      const cell = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot);
+      if (!live || !cell) { setLoading(false); return; }
+      const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+      const entry = detail?.per_cell?.[cell.id];
+      const mine = (entry?.all || []).filter(b => b.dong === creds.dong && b.ho === creds.ho);
+      const myTop = mine.length ? mine.reduce((a, b) => (a.amount > b.amount ? a : b)) : null;
+      const isLeading = entry && myTop && entry.top.id === myTop.id;
+      let dday = null;
+      if (live.bid_end) {
+        const ms = new Date(live.bid_end).getTime() - Date.now();
+        dday = Math.max(0, Math.ceil(ms / 86400000));
+      }
+      setData({ round: live, cell, myTop, isLeading, dday });
+      setLoading(false);
+    })();
+  }, [creds, spot]);
+
+  const doCancel = async () => {
+    if (!data?.round || !data?.cell) return;
+    setCancelling(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/bids', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ round_id: data.round.id, cell_id: data.cell.id, dong: creds.dong, ho: creds.ho }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(d.error || '취소 실패'); setCancelling(false); return; }
+      setConfirm(false);
+      go('bids');
+    } catch (e) { setErr('네트워크 오류'); setCancelling(false); }
+  };
+
+  if (loading) {
+    return (
+      <JPScreen>
+        <JPHeader left={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => go('bids')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button><div style={{ fontSize: 18, fontWeight: 700 }}>입찰 관리</div></div>} />
+        <div style={{ padding: 40, textAlign: 'center', color: C.n500, fontSize: 13 }}>불러오는 중…</div>
+      </JPScreen>
+    );
+  }
+
+  if (!data?.myTop) {
+    return (
+      <JPScreen>
+        <JPHeader left={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><button onClick={() => go('bids')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button><div style={{ fontSize: 18, fontWeight: 700 }}>입찰 관리</div></div>} />
+        <div style={{ padding: '40px 20px' }}>
+          <JPEmptyState emoji="📋" message={"이 구역에 입찰 내역이 없어요."} ctaLabel="구역 보러가기" onCta={() => go('list')} />
+        </div>
+      </JPScreen>
+    );
+  }
+
+  const { myTop, isLeading, dday } = data;
   return (
     <JPScreen>
       <JPHeader left={
@@ -222,9 +465,9 @@ function ReBidCancelScreen({ go, state }) {
             <JPSpotBadge number={spot} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{spot} 구역</div>
-              <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>내 입찰가 160,000원 · 🏆 1위</div>
+              <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>내 입찰가 {myTop.amount.toLocaleString()}원 · {isLeading ? '🏆 1위' : '순위 밖'}</div>
             </div>
-            <JPDdayBadge days={3} />
+            {dday != null && <JPDdayBadge days={dday} />}
           </div>
         </JPCard>
 
@@ -273,13 +516,15 @@ function ReBidCancelScreen({ go, state }) {
             <div style={{ width: 40, height: 4, background: C.n200, borderRadius: 2, alignSelf: 'center', marginBottom: 4 }} />
             <div style={{ fontSize: 18, fontWeight: 800, textAlign: 'center' }}>정말 입찰을 취소할까요?</div>
             <div style={{ fontSize: 13, color: C.n500, textAlign: 'center', lineHeight: 1.6 }}>
-              {spot} 구역 160,000원 신청이 취소돼요.<br/>이번 라운드에는 다시 신청할 수 없어요.
+              {spot} 구역 {myTop.amount.toLocaleString()}원 신청이 취소돼요.<br/>이번 라운드에는 다시 신청할 수 없어요.
             </div>
+            {err && <div style={{ fontSize: 12, color: C.danger, textAlign: 'center' }}>{err}</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-              <button onClick={() => { setConfirm(false); go('bids'); }} style={{
+              <button disabled={cancelling} onClick={doCancel} style={{
                 height: 52, borderRadius: 12, border: 0, background: C.danger, color: C.white,
-                fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: jpFont,
-              }}>취소할게요</button>
+                fontSize: 15, fontWeight: 700, cursor: cancelling ? 'default' : 'pointer', fontFamily: jpFont,
+                opacity: cancelling ? 0.6 : 1,
+              }}>{cancelling ? '취소 중…' : '취소할게요'}</button>
               <button onClick={() => setConfirm(false)} style={{
                 height: 52, borderRadius: 12, border: 0, background: C.n100, color: C.n700,
                 fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: jpFont,

@@ -68,3 +68,32 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
+
+// DELETE — cancel all of a household's bids on a cell in a live round.
+// Body: { round_id, cell_id, dong, ho }
+export async function DELETE(req: Request) {
+  const body = await req.json().catch(() => ({}));
+  const { round_id, cell_id, dong, ho } = body || {};
+  if (!round_id || !cell_id || !dong || !ho) {
+    return NextResponse.json({ error: "필수 필드 누락" }, { status: 400 });
+  }
+  const sb = createServiceClient();
+  const { data: round } = await sb
+    .from("rounds")
+    .select("status")
+    .eq("id", round_id)
+    .maybeSingle();
+  if (!round) return NextResponse.json({ error: "라운드를 찾을 수 없어요" }, { status: 404 });
+  if (round.status !== "live") {
+    return NextResponse.json({ error: "진행 중인 라운드만 취소할 수 있어요" }, { status: 400 });
+  }
+  const { error } = await sb
+    .from("bids")
+    .delete()
+    .eq("round_id", round_id)
+    .eq("cell_id", cell_id)
+    .eq("dong", dong)
+    .eq("ho", ho);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
