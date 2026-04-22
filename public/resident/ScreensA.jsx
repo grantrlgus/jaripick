@@ -62,7 +62,7 @@ function HomeScreen({ go, state }) {
           .map(([cid, e]) => {
             const c = cellById[cid];
             const uniq = new Set(e.all.map(b => `${b.dong}-${b.ho}`)).size;
-            return { cid, number: c ? `${c.row}-${c.n}` : cid, top: e.top.amount, count: uniq };
+            return { cid, number: c ? c.n : cid, top: e.top.amount, count: uniq };
           })
           .sort((a, b) => b.top - a.top)
           .slice(0, 5);
@@ -78,7 +78,7 @@ function HomeScreen({ go, state }) {
             const entry = perCell[b.cell_id];
             const isLeading = entry && entry.top.dong === b.dong && entry.top.ho === b.ho;
             const date = String(b.created_at || '').slice(0, 10);
-            return { spot: c ? `${c.row}-${c.n}` : b.cell_id, amount: b.amount, date: `${date}${isLeading ? ' · 1위' : ' · 순위 밖'}` };
+            return { spot: c ? c.n : b.cell_id, amount: b.amount, date: `${date}${isLeading ? ' · 1위' : ' · 순위 밖'}` };
           });
         }
         if (live.bid_end) {
@@ -98,7 +98,7 @@ function HomeScreen({ go, state }) {
             if (e.top.dong === myKey.dong && e.top.ho === myKey.ho) {
               hasAssignment = true;
               const c = cellById[cid];
-              assignment = { spot: c ? `${c.row}-${c.n}` : cid, amount: e.top.amount, round: r };
+              assignment = { spot: c ? c.n : cid, amount: e.top.amount, round: r };
               break;
             }
           }

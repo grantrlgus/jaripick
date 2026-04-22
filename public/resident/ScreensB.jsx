@@ -182,7 +182,7 @@ function JPNaverMap({ go }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>{picked.n}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.n900 }}>{picked.row}-{picked.n}번</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.n900 }}>{picked.n}번</div>
                 <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>입찰 대상</div>
               </div>
               <JPDdayBadge days={3} />
@@ -206,7 +206,7 @@ function JPNaverMap({ go }) {
                 </div>
               );
             })()}
-            <button onClick={() => { const code = `${picked.row}-${picked.n}`; setPicked(null); go && go('detail', { spot: code }); }} style={{
+            <button onClick={() => { const code = picked.n; setPicked(null); go && go('detail', { spot: code }); }} style={{
               width: '100%', padding: '12px 0', border: 0, borderRadius: 10,
               background: C.primary, color: C.white, fontSize: 14, fontWeight: 700,
               cursor: 'pointer', fontFamily: jpFont,
@@ -342,7 +342,7 @@ function BidScreen({ go, state }) {
       const liveRound = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
       setRound(liveRound);
       const cs = Array.isArray(cells) ? cells : (cells.cells || []);
-      const matched = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot);
+      const matched = cs.find(c => c.n === spot);
       setCell(matched || null);
       if (liveRound && matched) {
         const detail = await fetch(`/api/rounds/${liveRound.id}`).then(r => r.ok ? r.json() : null);
@@ -509,7 +509,7 @@ function MyBidsScreen({ go }) {
           else if (isTop) status = 'leading';
           const c = cellById[b.cell_id];
           list.push({
-            spot: c ? `${c.row}-${c.n}` : b.cell_id,
+            spot: c ? c.n : b.cell_id,
             amount: b.amount,
             date: String(b.created_at || '').slice(0, 10),
             status,
@@ -609,7 +609,7 @@ function MySpotCertScreen({ go }) {
           if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
             const c = cellById[cid];
             setCert({
-              spot: c ? `${c.row}-${c.n}` : cid,
+              spot: c ? c.n : cid,
               amount: e.top.amount,
               contractStart: r.contract_start,
               contractEnd: r.contract_end,
@@ -712,7 +712,7 @@ function SpotDetailScreen({ go, state }) {
       ]);
       if (!alive) return;
       const cs = Array.isArray(cells) ? cells : [];
-      const hit = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot) || null;
+      const hit = cs.find(c => c.n === spot) || null;
       setCell(hit);
       setPhotoUrl(hit && hit.photo_url ? hit.photo_url : null);
       const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;

@@ -71,7 +71,7 @@ function NotificationsScreen({ go }) {
         for (const [cid, myBid] of Object.entries(myBidsByCell)) {
           const entry = perCell[cid];
           const c = cellById[cid];
-          const spot = c ? `${c.row}-${c.n}` : cid;
+          const spot = c ? c.n : cid;
           const isTop = entry && entry.top.dong === creds.dong && entry.top.ho === creds.ho;
           const uniq = entry ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 1;
           if (r.status === 'finalized' && isTop) {
@@ -247,7 +247,7 @@ function PaymentScreen({ go }) {
         for (const [cid, e] of Object.entries(perCell)) {
           if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
             const c = cellById[cid];
-            setData({ spot: c ? `${c.row}-${c.n}` : cid, amount: e.top.amount, start: r.contract_start, end: r.contract_end });
+            setData({ spot: c ? c.n : cid, amount: e.top.amount, start: r.contract_start, end: r.contract_end });
             setLoading(false);
             return;
           }
@@ -396,7 +396,7 @@ function ReBidCancelScreen({ go, state }) {
       ]);
       const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
       const cs = Array.isArray(cells) ? cells : [];
-      const cell = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot);
+      const cell = cs.find(c => c.n === spot);
       if (!live || !cell) { setLoading(false); return; }
       const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
       const entry = detail?.per_cell?.[cell.id];
