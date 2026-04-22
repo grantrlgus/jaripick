@@ -21,5 +21,9 @@ export function createServiceClient() {
   if (!url || !serviceRoleKey) throw new Error("Supabase env vars not set");
   return createClient<Database>(url, serviceRoleKey, {
     auth: { persistSession: false },
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 }

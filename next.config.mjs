@@ -8,6 +8,12 @@ const nextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      { source: "/ops-9f3k", destination: "/admin/index.html" },
+      { source: "/resident", destination: "/resident/index.html" },
+    ];
+  },
 };
 
 export default nextConfig;

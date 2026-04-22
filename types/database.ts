@@ -56,6 +56,37 @@ export type Database = {
         }>;
         Relationships: [];
       };
+      parking_cells: {
+        Row: {
+          id: string;
+          n: string;
+          row: string;
+          lat: number;
+          lng: number;
+          rot: number;
+          type: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          n: string;
+          row: string;
+          lat: number;
+          lng: number;
+          rot?: number;
+          type?: string;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          n: string;
+          row: string;
+          lat: number;
+          lng: number;
+          rot: number;
+          type: string;
+        }>;
+        Relationships: [];
+      };
       apartment_interest_signals: {
         Row: {
           id: string;

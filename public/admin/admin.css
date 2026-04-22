@@ -1,0 +1,71 @@
+/* Admin console styles — pulled from jaripick-admin/src/index.css */
+:root {
+  --primary: #3B82F6;
+  --primary-light: #DBEAFE;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --n50:  #F9FAFB;
+  --n100: #F3F4F6;
+  --n200: #E5E7EB;
+  --n400: #9CA3AF;
+  --n500: #6B7280;
+  --n700: #374151;
+  --n900: #111827;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+}
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  color: var(--n900); background: var(--n50); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+input, select, textarea { font-family: inherit; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; font-weight: 600; font-size: 13px; transition: background .15s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #2563EB; }
+.btn-primary:disabled { background: var(--n200); color: var(--n400); cursor: not-allowed; }
+.btn-ghost { background: var(--n100); color: var(--n700); }
+.btn-ghost:hover { background: var(--n200); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-outline { border: 1.5px solid var(--n200); color: var(--n700); background: #fff; }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.card { background: #fff; border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.input { width: 100%; height: 40px; padding: 0 12px; border: 1.5px solid var(--n200); border-radius: 8px; font-size: 14px; color: var(--n900); background: #fff; }
+.input:focus { outline: none; border-color: var(--primary); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--n700); margin-bottom: 6px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-success { background: #D1FAE5; color: #065F46; }
+.badge-warn { background: #FEF3C7; color: #92400E; }
+.badge-danger { background: #FEE2E2; color: #991B1B; }
+.badge-neutral { background: var(--n100); color: var(--n500); }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th, .table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--n100); }
+.table th { font-weight: 600; color: var(--n500); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.table tbody tr:hover { background: var(--n50); }
+.shell { display: flex; height: 800px; }
+.sidebar { width: 220px; background: var(--n900); color: #fff; padding: 20px 0; display: flex; flex-direction: column; }
+.sidebar-brand { padding: 0 20px 16px; font-size: 18px; font-weight: 800; border-bottom: 1px solid #1f2937; margin-bottom: 12px; }
+.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+.sidebar-nav a { display: block; padding: 10px 14px; border-radius: 8px; color: #D1D5DB; text-decoration: none; font-weight: 500; font-size: 13px; cursor: pointer; }
+.sidebar-nav a:hover { background: #1f2937; color: #fff; }
+.sidebar-nav a.active { background: var(--primary); color: #fff; }
+.sidebar-foot { padding: 12px 20px; border-top: 1px solid #1f2937; font-size: 11px; color: #9CA3AF; }
+.main { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+.topbar { height: 56px; background: #fff; border-bottom: 1px solid var(--n100); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex-shrink: 0; }
+.topbar-title { font-size: 15px; font-weight: 700; color: var(--n900); }
+.content { flex: 1; padding: 24px; overflow: auto; }
+.login-wrap { min-height: 800px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary) 0%, #1E40AF 100%); padding: 20px; }
+.login-card { background: #fff; padding: 40px; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); width: 100%; max-width: 420px; }
+.login-logo { font-size: 24px; font-weight: 900; color: var(--primary); margin-bottom: 6px; }
+.login-sub { color: var(--n500); margin-bottom: 28px; font-size: 13px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.grow { flex: 1; }
+.muted { color: var(--n500); font-size: 12px; }
+.title { font-size: 20px; font-weight: 800; margin: 0 0 4px; }
+.subtitle { color: var(--n500); margin: 0 0 20px; }
