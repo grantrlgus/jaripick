@@ -109,6 +109,8 @@ function ComplexRegisterScreen({ go }) {
           localStorage.setItem('jp_dong', dong);
           localStorage.setItem('jp_ho', ho);
           localStorage.setItem('jp_name', name);
+          const cx = complexes.find(c => c.k === selected);
+          if (cx) localStorage.setItem('jp_complex_name', cx.n);
         } catch {}
       }
       if (d.status === 'approved') {
@@ -277,7 +279,10 @@ function VehicleScreen({ go }) {
       </div>
 
       <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
-        <JPPrimaryButton label="등록 완료" onClick={() => go('pending')} />
+        <JPPrimaryButton label="등록 완료" onClick={() => {
+          try { localStorage.setItem('jp_plate', plate); } catch {}
+          go('pending');
+        }} />
       </div>
     </JPScreen>
   );

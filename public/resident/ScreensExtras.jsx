@@ -42,9 +42,21 @@ function NotificationsScreen({ go }) {
 }
 
 function SettingsScreen({ go }) {
+  const profile = (() => {
+    try {
+      return {
+        name: localStorage.getItem('jp_name') || '',
+        dong: localStorage.getItem('jp_dong') || '',
+        ho: localStorage.getItem('jp_ho') || '',
+        plate: localStorage.getItem('jp_plate') || '',
+        complexName: localStorage.getItem('jp_complex_name') || '오금현대',
+      };
+    } catch { return { name: '', dong: '', ho: '', plate: '', complexName: '오금현대' }; }
+  })();
+  const dongHo = profile.dong && profile.ho ? `${profile.dong}동 ${profile.ho}호` : '';
   const rows = [
-    { e: '👤', l: '프로필', s: '홍길동 · 101동 1201호', to: null },
-    { e: '🚗', l: '차량 정보', s: '12가 3456 · 중형', to: 'vehicle' },
+    { e: '👤', l: '프로필', s: [profile.name, dongHo].filter(Boolean).join(' · ') || '—', to: null },
+    { e: '🚗', l: '차량 정보', s: profile.plate || '등록된 차량 없음', to: 'vehicle' },
     { e: '🔔', l: '알림 설정', s: '입찰, 라운드, 공지', to: null },
     { e: '💳', l: '결제 수단', s: '관리비 합산', to: null },
     { e: '❓', l: '도움말 / FAQ', s: null, to: 'faq' },
@@ -66,8 +78,8 @@ function SettingsScreen({ go }) {
         }}>
           <div style={{ width: 56, height: 56, borderRadius: 28, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧑</div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>홍길동</div>
-            <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>오금현대 · 101동 1201호</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{profile.name || '—'}</div>
+            <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{profile.complexName}{dongHo ? ` · ${dongHo}` : ''}</div>
           </div>
         </div>
 
@@ -96,6 +108,8 @@ function SettingsScreen({ go }) {
             localStorage.removeItem('jp_dong');
             localStorage.removeItem('jp_ho');
             localStorage.removeItem('jp_name');
+            localStorage.removeItem('jp_plate');
+            localStorage.removeItem('jp_complex_name');
           } catch {}
           go('login');
         }} style={{

@@ -33,14 +33,97 @@ function LoginScreen({ go }) {
 
 // ─── Home ───────────────────────────────────────────────────────
 function HomeScreen({ go, state }) {
-  const { myBids = [], hotSpots = [], auction, hasAssignment } = state;
+  const [data, setData] = React.useState({ myBids: [], hotSpots: [], auction: null, dday: null, hasAssignment: false, assignment: null });
+
+  const myKey = React.useMemo(() => {
+    try {
+      const d = localStorage.getItem('jp_dong') || '';
+      const h = localStorage.getItem('jp_ho') || '';
+      return d && h ? { dong: d, ho: h, key: `${d}-${h}` } : null;
+    } catch { return null; }
+  }, []);
+
+  const load = React.useCallback(async () => {
+    try {
+      const [allRounds, cells] = await Promise.all([
+        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const cellById = {};
+      (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
+      const live = (Array.isArray(allRounds) ? allRounds : []).find(r => r.status === 'live');
+      const finalizedList = (Array.isArray(allRounds) ? allRounds : []).filter(r => r.status === 'finalized');
+
+      let hotSpots = [], myBids = [], dday = null;
+      if (live) {
+        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        const perCell = detail?.per_cell || {};
+        hotSpots = Object.entries(perCell)
+          .map(([cid, e]) => {
+            const c = cellById[cid];
+            const uniq = new Set(e.all.map(b => `${b.dong}-${b.ho}`)).size;
+            return { cid, number: c ? `${c.row}-${c.n}` : cid, top: e.top.amount, count: uniq };
+          })
+          .sort((a, b) => b.top - a.top)
+          .slice(0, 5);
+        if (myKey) {
+          const mine = (detail?.bids || []).filter(b => b.dong === myKey.dong && b.ho === myKey.ho);
+          const byCell = {};
+          mine.forEach(b => {
+            const cur = byCell[b.cell_id];
+            if (!cur || b.amount > cur.amount) byCell[b.cell_id] = b;
+          });
+          myBids = Object.values(byCell).map(b => {
+            const c = cellById[b.cell_id];
+            const entry = perCell[b.cell_id];
+            const isLeading = entry && entry.top.dong === b.dong && entry.top.ho === b.ho;
+            const date = String(b.created_at || '').slice(0, 10);
+            return { spot: c ? `${c.row}-${c.n}` : b.cell_id, amount: b.amount, date: `${date}${isLeading ? ' · 1위' : ' · 순위 밖'}` };
+          });
+        }
+        if (live.bid_end) {
+          const end = new Date(live.bid_end);
+          const today = new Date();
+          const ms = end.getTime() - today.getTime();
+          dday = Math.max(0, Math.ceil(ms / 86400000));
+        }
+      }
+
+      let hasAssignment = false, assignment = null;
+      if (myKey) {
+        for (const r of finalizedList) {
+          const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+          const perCell = detail?.per_cell || {};
+          for (const [cid, e] of Object.entries(perCell)) {
+            if (e.top.dong === myKey.dong && e.top.ho === myKey.ho) {
+              hasAssignment = true;
+              const c = cellById[cid];
+              assignment = { spot: c ? `${c.row}-${c.n}` : cid, amount: e.top.amount, round: r };
+              break;
+            }
+          }
+          if (hasAssignment) break;
+        }
+      }
+
+      setData({ myBids, hotSpots, auction: live, dday, hasAssignment, assignment });
+    } catch {}
+  }, [myKey]);
+
+  React.useEffect(() => {
+    load();
+    const iv = setInterval(load, 10000);
+    return () => clearInterval(iv);
+  }, [load]);
+
+  const { myBids, hotSpots, auction, dday, hasAssignment } = data;
   return (
     <JPScreen>
       <JPHeader
         left={
           <div>
-            <div style={{ fontSize: 12, color: C.n500 }}>101동 1201호</div>
-            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2 }}>오금현대</div>
+            <div style={{ fontSize: 12, color: C.n500 }}>{(() => { try { const d = localStorage.getItem('jp_dong'); const h = localStorage.getItem('jp_ho'); return d && h ? `${d}동 ${h}호` : ''; } catch { return ''; } })()}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2 }}>{(() => { try { return localStorage.getItem('jp_complex_name') || '오금현대'; } catch { return '오금현대'; } })()}</div>
           </div>
         }
         right={
@@ -58,9 +141,9 @@ function HomeScreen({ go, state }) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>지금 바로 참여하세요!</div>
-              <span style={{ padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.2)', fontSize: 11, fontWeight: 700 }}>D-3</span>
+              {dday != null && <span style={{ padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.2)', fontSize: 11, fontWeight: 700 }}>D-{dday}</span>}
             </div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>선호 주차 구역 입찰 진행중</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{auction.name || '선호 주차 구역 입찰 진행중'}</div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: 600, marginTop: 8 }}>구역 보러가기 →</div>
           </div>
         )}

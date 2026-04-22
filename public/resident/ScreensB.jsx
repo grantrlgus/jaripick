@@ -469,14 +469,71 @@ function BidCompleteScreen({ go, state }) {
 
 // ─── MyBids ─────────────────────────────────────────────────────
 function MyBidsScreen({ go }) {
-  const bids = [
-    { spot: 'A-23', amount: 160000, date: '2026-04-18', status: 'leading', top: 160000 },
-    { spot: 'B-07', amount: 120000, date: '2026-04-17', status: 'outbid', top: 140000 },
-    { spot: 'A-12', amount: 90000, date: '2026-04-15', status: 'confirmed' },
-  ];
+  const [bids, setBids] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const myKey = React.useMemo(() => {
+    try {
+      const d = localStorage.getItem('jp_dong') || '';
+      const h = localStorage.getItem('jp_ho') || '';
+      return d && h ? { dong: d, ho: h } : null;
+    } catch { return null; }
+  }, []);
+
+  const load = React.useCallback(async () => {
+    if (!myKey) { setLoading(false); return; }
+    try {
+      const [rounds, cells] = await Promise.all([
+        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const cellById = {};
+      (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
+      const list = [];
+      for (const r of (Array.isArray(rounds) ? rounds : [])) {
+        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        if (!detail) continue;
+        const perCell = detail.per_cell || {};
+        const myPerCell = {};
+        (detail.bids || []).forEach(b => {
+          if (b.dong !== myKey.dong || b.ho !== myKey.ho) return;
+          const cur = myPerCell[b.cell_id];
+          if (!cur || b.amount > cur.amount) myPerCell[b.cell_id] = b;
+        });
+        Object.values(myPerCell).forEach(b => {
+          const entry = perCell[b.cell_id];
+          const top = entry?.top?.amount || 0;
+          const isTop = entry && entry.top.dong === b.dong && entry.top.ho === b.ho;
+          let status = 'outbid';
+          if (r.status === 'finalized' && isTop) status = 'confirmed';
+          else if (isTop) status = 'leading';
+          const c = cellById[b.cell_id];
+          list.push({
+            spot: c ? `${c.row}-${c.n}` : b.cell_id,
+            amount: b.amount,
+            date: String(b.created_at || '').slice(0, 10),
+            status,
+            top,
+            roundId: r.id,
+          });
+        });
+      }
+      list.sort((a, b) => (a.date < b.date ? 1 : -1));
+      setBids(list);
+    } catch {}
+    setLoading(false);
+  }, [myKey]);
+
+  React.useEffect(() => { load(); }, [load]);
+
   return (
     <JPScreen>
       <JPHeader title="내 신청" />
+      {!loading && bids.length === 0 && (
+        <div style={{ padding: '40px 20px' }}>
+          <JPEmptyState emoji="📋" message={"아직 신청한 구역이 없어요."} ctaLabel="구역 보러가기" onCta={() => go('list')} />
+        </div>
+      )}
       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 100 }}>
         {bids.map((b, i) => (
           <div key={i} onClick={() => go('detail', { spot: b.spot })} style={{
@@ -519,7 +576,82 @@ function MyBidsScreen({ go }) {
 }
 
 // ─── MySpotCert ─────────────────────────────────────────────────
-function MySpotCertScreen() {
+function MySpotCertScreen({ go }) {
+  const [cert, setCert] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  const creds = React.useMemo(() => {
+    try {
+      return {
+        dong: localStorage.getItem('jp_dong') || '',
+        ho: localStorage.getItem('jp_ho') || '',
+        name: localStorage.getItem('jp_name') || '',
+        plate: localStorage.getItem('jp_plate') || '',
+        complexName: localStorage.getItem('jp_complex_name') || '오금현대',
+      };
+    } catch { return { dong: '', ho: '', name: '', plate: '', complexName: '오금현대' }; }
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      if (!creds.dong || !creds.ho) { setLoading(false); return; }
+      const [rounds, cells] = await Promise.all([
+        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const cellById = {};
+      (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
+      const finalized = (Array.isArray(rounds) ? rounds : []).filter(r => r.status === 'finalized');
+      for (const r of finalized) {
+        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        const perCell = detail?.per_cell || {};
+        for (const [cid, e] of Object.entries(perCell)) {
+          if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
+            const c = cellById[cid];
+            setCert({
+              spot: c ? `${c.row}-${c.n}` : cid,
+              amount: e.top.amount,
+              contractStart: r.contract_start,
+              contractEnd: r.contract_end,
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      setLoading(false);
+    })();
+  }, [creds]);
+
+  if (loading) {
+    return (
+      <JPScreen>
+        <JPHeader title="내 구역" />
+        <div style={{ padding: 40, textAlign: 'center', color: C.n500, fontSize: 13 }}>불러오는 중…</div>
+      </JPScreen>
+    );
+  }
+
+  if (!cert) {
+    return (
+      <JPScreen>
+        <JPHeader title="내 구역" />
+        <div style={{ padding: '40px 20px' }}>
+          <JPEmptyState emoji="🎫" message={"아직 확정된 구역이 없어요.\n입찰에 참여해보세요!"} ctaLabel="구역 보러가기" onCta={() => go && go('list')} />
+        </div>
+      </JPScreen>
+    );
+  }
+
+  const months = (() => {
+    if (!cert.contractStart || !cert.contractEnd) return null;
+    const s = new Date(cert.contractStart), e = new Date(cert.contractEnd);
+    return Math.max(1, Math.round((e - s) / (30 * 86400000)));
+  })();
+  const periodStr = cert.contractStart && cert.contractEnd
+    ? `${months ? months + '개월 · ' : ''}${cert.contractStart} ~ ${cert.contractEnd}`
+    : '—';
+
   return (
     <JPScreen>
       <JPHeader title="내 구역" />
@@ -536,13 +668,13 @@ function MySpotCertScreen() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>주차 구역</div>
-            <div style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, letterSpacing: '-1px' }}>A-23</div>
+            <div style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, letterSpacing: '-1px' }}>{cert.spot}</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
-            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>계약 기간</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>3개월 · 2026-05-01 ~ 07-31</div></div>
-            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>확정 금액</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>180,000원</div></div>
-            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>차량 번호</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>12가 3456</div></div>
-            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>단지/동호수</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>오금현대 101동 1201호</div></div>
+            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>계약 기간</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{periodStr}</div></div>
+            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>확정 금액</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{cert.amount.toLocaleString()}원</div></div>
+            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>차량 번호</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{creds.plate || '—'}</div></div>
+            <div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>단지/동호수</div><div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{creds.complexName} {creds.dong}동 {creds.ho}호</div></div>
           </div>
         </div>
         <div style={{ fontSize: 12, color: C.n500, textAlign: 'center' }}>
@@ -557,18 +689,56 @@ function MySpotCertScreen() {
 function SpotDetailScreen({ go, state }) {
   const spot = state.currentSpot || 'A-23';
   const [photoUrl, setPhotoUrl] = React.useState(null);
+  const [cell, setCell] = React.useState(null);
+  const [round, setRound] = React.useState(null);
+  const [entry, setEntry] = React.useState(null);
+  const [myBid, setMyBid] = React.useState(null);
+  const [dday, setDday] = React.useState(null);
+
+  const myKey = React.useMemo(() => {
+    try {
+      const d = localStorage.getItem('jp_dong') || '';
+      const h = localStorage.getItem('jp_ho') || '';
+      return d && h ? { dong: d, ho: h } : null;
+    } catch { return null; }
+  }, []);
+
   React.useEffect(() => {
     let alive = true;
-    fetch('/api/cells', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : [])
-      .then(cells => {
-        if (!alive || !Array.isArray(cells)) return;
-        const hit = cells.find(c => c.n === spot);
-        setPhotoUrl(hit && hit.photo_url ? hit.photo_url : null);
-      })
-      .catch(() => {});
+    (async () => {
+      const [cells, rounds] = await Promise.all([
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      if (!alive) return;
+      const cs = Array.isArray(cells) ? cells : [];
+      const hit = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot) || null;
+      setCell(hit);
+      setPhotoUrl(hit && hit.photo_url ? hit.photo_url : null);
+      const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
+      setRound(live);
+      if (live && live.bid_end) {
+        const ms = new Date(live.bid_end).getTime() - Date.now();
+        setDday(Math.max(0, Math.ceil(ms / 86400000)));
+      }
+      if (live && hit) {
+        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        if (!alive) return;
+        const e = detail?.per_cell?.[hit.id] || null;
+        setEntry(e);
+        if (myKey && e) {
+          const mine = e.all.filter(b => b.dong === myKey.dong && b.ho === myKey.ho);
+          if (mine.length) setMyBid(mine.reduce((a, b) => (a.amount > b.amount ? a : b)));
+        }
+      }
+    })();
     return () => { alive = false; };
-  }, [spot]);
+  }, [spot, myKey]);
+
+  const topAmount = entry?.top?.amount || 0;
+  const participants = entry?.all ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 0;
+  const isLeading = !!(myBid && entry && entry.top.dong === myBid.dong && entry.top.ho === myBid.ho);
+
   return (
     <JPScreen>
       <JPHeader
@@ -591,26 +761,28 @@ function SpotDetailScreen({ go, state }) {
           }}>🅿️</div>
         )}
 
-        <div style={{ background: C.primary, color: C.white, borderRadius: 12, padding: 16 }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>🏆 현재 1위예요!</div>
-          <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>160,000원</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>내 입찰가</div>
-        </div>
+        {myBid && (
+          <div style={{ background: isLeading ? C.primary : C.n900, color: C.white, borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>{isLeading ? '🏆 현재 1위예요!' : '순위 밖이에요'}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>{myBid.amount.toLocaleString()}원</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 2 }}>내 입찰가</div>
+          </div>
+        )}
 
         <div style={{ background: C.white, borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>입찰 정보</div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 11, color: C.n500 }}>참여자</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>3명</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{participants}명</div>
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 11, color: C.n500 }}>최고가</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2, color: C.primary }}>160,000원</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2, color: C.primary }}>{topAmount ? topAmount.toLocaleString() + '원' : '—'}</div>
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 11, color: C.n500 }}>마감</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>D-3</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{dday != null ? `D-${dday}` : '—'}</div>
             </div>
           </div>
         </div>
@@ -620,8 +792,8 @@ function SpotDetailScreen({ go, state }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>위치</span><span>지상 A동 옆</span></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>유형</span><span>일반형 (2.5m × 5m)</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>계약 기간</span><span>3개월 (2026-05-01 ~ 07-31)</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>결제</span><span>관리비 합산 · 3개월 분할</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>계약 기간</span><span>{round && round.contract_start && round.contract_end ? `${round.contract_start} ~ ${round.contract_end}` : '—'}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: C.n500 }}>결제</span><span>관리비 합산</span></div>
           </div>
         </div>
 
@@ -634,7 +806,7 @@ function SpotDetailScreen({ go, state }) {
       </div>
 
       <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
-        <JPPrimaryButton label="재입찰 하기" onClick={() => go('bid', { spot })} />
+        <JPPrimaryButton label={myBid ? '재입찰 하기' : '입찰하기'} onClick={() => go('bid', { spot })} />
       </div>
     </JPScreen>
   );
