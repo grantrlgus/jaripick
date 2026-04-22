@@ -5,7 +5,7 @@ function Sidebar({ active, go }) {
     { k: 'dashboard',  label: '📊  대시보드' },
     { k: 'layout',     label: '🗺️  구역 설정' },
     { k: 'spots',      label: '🅿️  구역 목록' },
-    { k: 'residents',  label: '👥  입주민 승인' },
+    { k: 'residents',  label: '👥  입주민' },
     { k: 'auctions',   label: '🔨  입찰 라운드' },
     { k: 'roundwiz',   label: '🪄  라운드 마법사' },
     { k: 'payments',   label: '💳  정산 관리' },
@@ -75,7 +75,7 @@ function Dashboard({ go }) {
   ];
   const links = [
     { k: 'spots', t: '🅿️ 구역 목록', d: '입찰 대상/제외 구역을 번호로 지정.' },
-    { k: 'residents', t: '👥 입주민 승인', d: '3명이 수동 승인을 기다리고 있어요.' },
+    { k: 'residents', t: '👥 입주민', d: '3명이 수동 승인을 기다리고 있어요.' },
     { k: 'auctions', t: '🔨 입찰 라운드 관리', d: '새 라운드 시작, 결과 확정.' },
   ];
   return (
@@ -241,8 +241,9 @@ function SpotsPage({ go }) {
   );
 }
 
-// ─── Residents approval ─────────────────────────────────────────
+// ─── Residents (roster + approval) ──────────────────────────────
 function ResidentsPage() {
+  const [tab, setTab] = React.useState('roster');
   const pending = [
     { name: '박지민', dong: '102', ho: '1503', car: '56다 9012', at: '2026-04-19 22:07', reason: '명단에 없는 호수' },
     { name: '장현진', dong: '103', ho: '0805', car: '77바 1234', at: '2026-04-19 18:22', reason: '명단 실명 불일치' },
@@ -254,78 +255,90 @@ function ResidentsPage() {
     { name: '정수민', dong: '101', ho: '0802', car: '78라 3456', at: '2026-04-15', auto: false },
     { name: '조현우', dong: '104', ho: '2101', car: '90마 7890', at: '2026-04-12', auto: true },
   ];
+
   return (
     <div>
-      <h1 className="title">입주민 승인</h1>
-      <p className="subtitle">카카오 실명 + 명단 매칭이 일치하면 자동 승인, 이외에만 수동 검토합니다.</p>
+      <h1 className="title">입주민</h1>
+      <p className="subtitle">사전 등록된 명단과 앱 가입 요청을 한 곳에서 관리합니다.</p>
 
-      <div className="card" style={{ marginBottom: 16, background: 'var(--primary-light)', padding: 14 }}>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+      <div className="row" style={{ marginBottom: 16, gap: 4 }}>
+        <button className={tab === 'roster' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setTab('roster')}>
+          📋 명단
+        </button>
+        <button className={tab === 'requests' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setTab('requests')}>
+          ✋ 가입 요청 <span className="badge badge-warn" style={{ marginLeft: 6 }}>{pending.length}</span>
+        </button>
+      </div>
+
+      {tab === 'roster' && (
+        <div className="card">
+          <HouseholdSection />
+        </div>
+      )}
+
+      {tab === 'requests' && (
+        <>
+          <div className="card" style={{ marginBottom: 16, background: 'var(--primary-light)', padding: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>⚙️ 자동 승인 규칙</div>
             <div className="muted" style={{ marginTop: 4, fontSize: 13, color: 'var(--n700)' }}>
-              카카오 로그인 → 실명 / 동 / 호수가 업로드된 <b>입주민 명단</b>과 일치하면 즉시 승인됩니다.<br/>
-              불일치/미등록/보안 이상 건만 수동 큐에 쌓입니다.
+              카카오 로그인 → 실명 / 동 / 호수가 <b>명단 탭</b>과 일치하면 즉시 승인됩니다.<br/>
+              불일치 / 미등록 건만 아래 큐에 쌓입니다.
             </div>
           </div>
-          <div className="row">
-            <button className="btn btn-outline">명단 다운로드</button>
-            <button className="btn btn-primary">+ 명단 업로드</button>
+
+          <div className="card" style={{ marginBottom: 20, padding: 0 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>수동 승인 큐</div>
+              <span className="badge badge-warn">{pending.length}</span>
+              <span className="muted" style={{ fontSize: 12 }}>— 명단 매칭 실패 건</span>
+            </div>
+            <table className="table">
+              <thead>
+                <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>이유</th><th>요청 시각</th><th style={{ width: 200 }}></th></tr>
+              </thead>
+              <tbody>
+                {pending.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td>{p.dong}동 {p.ho}호</td>
+                    <td>{p.car}</td>
+                    <td><span className="badge badge-warn">{p.reason}</span></td>
+                    <td><span className="muted">{p.at}</span></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                        <button className="btn btn-outline" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>거절</button>
+                        <button className="btn btn-primary" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>승인</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: 20, padding: 0 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>수동 승인 큐</div>
-          <span className="badge badge-warn">{pending.length}</span>
-          <span className="muted" style={{ fontSize: 12 }}>— 명단 매칭 실패 건</span>
-        </div>
-        <table className="table">
-          <thead>
-            <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>이유</th><th>요청 시각</th><th style={{ width: 200 }}></th></tr>
-          </thead>
-          <tbody>
-            {pending.map((p, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td>{p.dong}동 {p.ho}호</td>
-                <td>{p.car}</td>
-                <td><span className="badge badge-warn">{p.reason}</span></td>
-                <td><span className="muted">{p.at}</span></td>
-                <td style={{ textAlign: 'right' }}>
-                  <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                    <button className="btn btn-outline" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>거절</button>
-                    <button className="btn btn-primary" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>승인</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card" style={{ padding: 0 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)' }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>승인된 입주민 <span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>({approved.length})</span></div>
-        </div>
-        <table className="table">
-          <thead>
-            <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>승인일</th><th>상태</th></tr>
-          </thead>
-          <tbody>
-            {approved.map((p, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td>{p.dong}동 {p.ho}호</td>
-                <td>{p.car}</td>
-                <td><span className="muted">{p.at}</span></td>
-                <td><span className="badge badge-success">승인됨</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div className="card" style={{ padding: 0 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)' }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>승인된 입주민 <span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>({approved.length})</span></div>
+            </div>
+            <table className="table">
+              <thead>
+                <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>승인일</th><th>상태</th></tr>
+              </thead>
+              <tbody>
+                {approved.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td>{p.dong}동 {p.ho}호</td>
+                    <td>{p.car}</td>
+                    <td><span className="muted">{p.at}</span></td>
+                    <td><span className="badge badge-success">승인됨</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -443,7 +456,7 @@ function ComplexPage() {
   return (
     <div>
       <h1 className="title">단지 설정</h1>
-      <p className="subtitle">단지 기본 정보 · 입찰 규칙 · 입주민 명단을 관리합니다.</p>
+      <p className="subtitle">단지 기본 정보와 입찰 규칙을 설정합니다.</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>기본 정보</div>
@@ -496,9 +509,6 @@ function ComplexPage() {
               💡 계약 기간은 <b>라운드 마법사</b>에서 라운드별로 달력으로 지정합니다.
             </div>
           </div>
-        </div>
-        <div className="card" style={{ gridColumn: '1 / 3' }}>
-          <HouseholdSection />
         </div>
       </div>
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
