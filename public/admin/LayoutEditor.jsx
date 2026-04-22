@@ -467,6 +467,11 @@ function LayoutEditorPage() {
                 </div>
               </div>
 
+              <CellPhotoField
+                cell={selected}
+                onChange={(photo_url) => updateCell(selected.id, { photo_url })}
+              />
+
               <button
                 onClick={() => deleteCell(selected.id)}
                 className="btn btn-outline"
@@ -497,6 +502,89 @@ function LayoutEditorPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CellPhotoField({ cell, onChange }) {
+  const [uploading, setUploading] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const inputRef = React.useRef(null);
+
+  const onPick = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!cell.id) return;
+    setUploading(true);
+    setErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/cells/${encodeURIComponent(cell.id)}/photo`, {
+        method: 'POST',
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || res.statusText);
+      onChange(json.photo_url);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onRemove = async () => {
+    if (!cell.id) return;
+    setUploading(true);
+    setErr('');
+    try {
+      const res = await fetch(`/api/cells/${encodeURIComponent(cell.id)}/photo`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+      onChange(null);
+    } catch (ex) {
+      setErr(ex.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="label">사진</label>
+      {cell.photo_url ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <img src={cell.photo_url} alt="구역 사진" style={{
+            width: '100%', maxHeight: 160, objectFit: 'cover',
+            borderRadius: 8, border: '1px solid var(--n200)',
+          }} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => inputRef.current && inputRef.current.click()}
+              disabled={uploading}
+              className="btn btn-outline"
+              style={{ flex: 1, height: 32, fontSize: 12 }}>
+              {uploading ? '업로드 중…' : '사진 교체'}
+            </button>
+            <button onClick={onRemove}
+              disabled={uploading}
+              className="btn btn-outline"
+              style={{ height: 32, fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+              삭제
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => inputRef.current && inputRef.current.click()}
+          disabled={uploading}
+          className="btn btn-outline"
+          style={{ width: '100%', height: 36, fontSize: 12 }}>
+          {uploading ? '업로드 중…' : '📷 사진 업로드'}
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" onChange={onPick}
+        style={{ display: 'none' }} />
+      {err && <div style={{ fontSize: 11, color: 'var(--danger)', marginTop: 4 }}>{err}</div>}
     </div>
   );
 }

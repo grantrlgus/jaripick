@@ -65,6 +65,7 @@ export type Database = {
           lng: number;
           rot: number;
           type: string;
+          photo_url: string | null;
           updated_at: string;
         };
         Insert: {
@@ -75,6 +76,7 @@ export type Database = {
           lng: number;
           rot?: number;
           type?: string;
+          photo_url?: string | null;
           updated_at?: string;
         };
         Update: Partial<{
@@ -84,6 +86,7 @@ export type Database = {
           lng: number;
           rot: number;
           type: string;
+          photo_url: string | null;
         }>;
         Relationships: [];
       };

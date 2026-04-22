@@ -102,9 +102,23 @@ function JPNaverMap({ go }) {
   }, [cells, mapReady]);
 
   return (
-    <div style={{ position: 'relative', height: 460, borderRadius: 12, overflow: 'hidden', background: C.n100 }}>
+    <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', background: C.n100 }}>
       <div ref={divRef} style={{ position: 'absolute', inset: 0 }} />
-      {cells.length === 0 && (
+      {!mapReady && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 10, pointerEvents: 'none',
+          background: C.n100,
+        }}>
+          <div style={{
+            width: 28, height: 28, border: `3px solid ${C.n200}`,
+            borderTopColor: C.primary, borderRadius: '50%',
+            animation: 'jp-spin 0.8s linear infinite',
+          }} />
+          <div style={{ fontSize: 12, color: C.n500 }}>지도 불러오는 중…</div>
+        </div>
+      )}
+      {mapReady && cells.length === 0 && (
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', gap: 6, pointerEvents: 'none',
@@ -192,8 +206,8 @@ function SpotListScreen({ go, state }) {
   };
 
   return (
-    <JPScreen>
-      <div style={{ paddingTop: 52 }}>
+    <JPScreen style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flexShrink: 0, paddingTop: 52 }}>
         {/* Auction banner */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -221,50 +235,48 @@ function SpotListScreen({ go, state }) {
             }}>{t.l}</button>
           ))}
         </div>
+      </div>
 
-        {mode === 'map' ? (
-          <div style={{ padding: '12px 20px 110px' }}>
-            <JPNaverMap go={go} />
-          </div>
-        ) : (
-          <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 110 }}>
-            {sections.flatMap(sec => sec.spots.map(s => ({ ...s, sec: sec.id }))).map(s => (
-              <div key={`${s.sec}-${s.n}`} onClick={() => s.state !== 'closed' && go('detail', { spot: `${s.sec}-${s.n}` })}
-                style={{
-                  background: C.white, borderRadius: 12, padding: 14,
-                  boxShadow: '0 1px 4px rgba(0,0,0,.05)',
-                  display: 'flex', alignItems: 'center', gap: 12, cursor: s.state === 'closed' ? 'default' : 'pointer',
-                  opacity: s.state === 'closed' ? 0.55 : 1,
-                }}>
-                <JPSpotBadge number={`${s.sec}-${s.n}`} size={40} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{s.sec}-{s.n} 구역</div>
-                  <div style={{ fontSize: 12, color: C.n500 }}>{s.label || '신청 가능'}</div>
-                </div>
-                <span style={{ fontSize: 20, color: C.n400 }}>›</span>
+      {mode === 'map' ? (
+        <JPNaverMap go={go} />
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sections.flatMap(sec => sec.spots.map(s => ({ ...s, sec: sec.id }))).map(s => (
+            <div key={`${s.sec}-${s.n}`} onClick={() => s.state !== 'closed' && go('detail', { spot: `${s.sec}-${s.n}` })}
+              style={{
+                background: C.white, borderRadius: 12, padding: 14,
+                boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+                display: 'flex', alignItems: 'center', gap: 12, cursor: s.state === 'closed' ? 'default' : 'pointer',
+                opacity: s.state === 'closed' ? 0.55 : 1,
+              }}>
+              <JPSpotBadge number={`${s.sec}-${s.n}`} size={40} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{s.sec}-{s.n} 구역</div>
+                <div style={{ fontSize: 12, color: C.n500 }}>{s.label || '신청 가능'}</div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Legend */}
-        <div style={{
-          position: 'absolute', bottom: 82, left: 0, right: 0,
-          display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
-          padding: '10px 16px', background: C.white, borderTop: `1px solid ${C.n100}`,
-        }}>
-          {[
-            { c: C.white, b: C.n200, l: '신청 가능' },
-            { c: C.successLight, b: C.success, l: '내가 신청' },
-            { c: C.primaryLight, b: C.primary, l: '내가 1위' },
-            { c: C.n100, b: C.n200, l: '마감' },
-          ].map((i, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: i.c, border: `1.5px solid ${i.b}` }} />
-              <div style={{ fontSize: 11, color: C.n500 }}>{i.l}</div>
+              <span style={{ fontSize: 20, color: C.n400 }}>›</span>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Legend */}
+      <div style={{
+        flexShrink: 0,
+        display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
+        padding: '10px 16px', background: C.white, borderTop: `1px solid ${C.n100}`,
+      }}>
+        {[
+          { c: C.white, b: C.n200, l: '신청 가능' },
+          { c: C.successLight, b: C.success, l: '내가 신청' },
+          { c: C.primaryLight, b: C.primary, l: '내가 1위' },
+          { c: C.n100, b: C.n200, l: '마감' },
+        ].map((i, idx) => (
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ width: 12, height: 12, borderRadius: 3, background: i.c, border: `1.5px solid ${i.b}` }} />
+            <div style={{ fontSize: 11, color: C.n500 }}>{i.l}</div>
+          </div>
+        ))}
       </div>
     </JPScreen>
   );
@@ -456,15 +468,40 @@ function MySpotCertScreen() {
 // ─── SpotDetail ─────────────────────────────────────────────────
 function SpotDetailScreen({ go, state }) {
   const spot = state.currentSpot || 'A-23';
+  const [photoUrl, setPhotoUrl] = React.useState(null);
+  React.useEffect(() => {
+    let alive = true;
+    fetch('/api/cells', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(cells => {
+        if (!alive || !Array.isArray(cells)) return;
+        const hit = cells.find(c => c.n === spot);
+        setPhotoUrl(hit && hit.photo_url ? hit.photo_url : null);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [spot]);
   return (
     <JPScreen>
-      <JPHeader title={`${spot} 구역`} />
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 120 }}>
-        <div style={{
-          background: C.n100, borderRadius: 12, height: 160,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 48,
-        }}>🅿️</div>
+      <JPHeader
+        title={`${spot} 구역`}
+        left={<button onClick={() => go('list')} style={{
+          background: 'transparent', border: 0, fontSize: 24, cursor: 'pointer',
+          padding: 0, color: C.n700, lineHeight: 1,
+        }}>‹</button>}
+      />
+      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {photoUrl ? (
+          <img src={photoUrl} alt={`${spot} 구역`} style={{
+            width: '100%', height: 200, objectFit: 'cover', borderRadius: 12,
+          }} />
+        ) : (
+          <div style={{
+            background: C.n100, borderRadius: 12, height: 160,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 48,
+          }}>🅿️</div>
+        )}
 
         <div style={{ background: C.primary, color: C.white, borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>🏆 현재 1위예요!</div>

@@ -39,12 +39,13 @@ function JPScreen({ children, bg = C.n100, style = {} }) {
 function JPHeader({ left, right, title }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      display: 'flex', alignItems: 'center',
       padding: '52px 20px 12px', background: C.white,
-      borderBottom: `1px solid ${C.n100}`,
+      borderBottom: `1px solid ${C.n100}`, gap: 8,
     }}>
-      <div>{left ?? <div style={{ fontSize: 18, fontWeight: 700 }}>{title}</div>}</div>
-      <div>{right}</div>
+      {left != null && <div style={{ display: 'flex', alignItems: 'center' }}>{left}</div>}
+      <div style={{ flex: 1, fontSize: 18, fontWeight: 700 }}>{title}</div>
+      {right != null && <div>{right}</div>}
     </div>
   );
 }
@@ -59,7 +60,7 @@ function JPTabBar({ active = 'home', onChange = () => {} }) {
   ];
   return (
     <div style={{
-      position: 'absolute', bottom: 0, left: 0, right: 0,
+      flexShrink: 0,
       background: C.white, borderTop: `1px solid ${C.n100}`,
       display: 'flex', padding: '6px 0 28px',
     }}>
