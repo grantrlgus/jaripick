@@ -328,6 +328,7 @@ function BidScreen({ go, state }) {
   const [amount, setAmount] = React.useState(0);
   const [round, setRound] = React.useState(null);
   const [cell, setCell] = React.useState(null);
+  const [cellsList, setCellsList] = React.useState([]);
   const [topBid, setTopBid] = React.useState(0);
   const [participants, setParticipants] = React.useState(0);
   const [submitting, setSubmitting] = React.useState(false);
@@ -342,6 +343,7 @@ function BidScreen({ go, state }) {
       const liveRound = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
       setRound(liveRound);
       const cs = Array.isArray(cells) ? cells : (cells.cells || []);
+      setCellsList(cs);
       const matched = cs.find(c => c.n === spot);
       setCell(matched || null);
       if (liveRound && matched) {
@@ -359,20 +361,33 @@ function BidScreen({ go, state }) {
 
   const isTooLow = amount > 0 && amount <= topBid;
 
+  const postBid = async (payload) => {
+    const res = await fetch('/api/bids', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await res.json().catch(() => ({}));
+    return { res, d };
+  };
+
   const submit = async () => {
     setErr('');
     if (!round || !cell) { setErr('진행 중인 라운드가 없어요'); return; }
-    setSubmitting(true);
     const name = (() => { try { return localStorage.getItem('jp_name') || ''; } catch { return ''; } })();
     const dong = (() => { try { return localStorage.getItem('jp_dong') || ''; } catch { return ''; } })();
     const ho = (() => { try { return localStorage.getItem('jp_ho') || ''; } catch { return ''; } })();
-    if (!name || !dong || !ho) { setErr('로그인 정보가 없어요. 처음부터 다시 시작해주세요.'); setSubmitting(false); return; }
-    const res = await fetch('/api/bids', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ round_id: round.id, cell_id: cell.id, dong, ho, name, amount }),
-    });
+    if (!name || !dong || !ho) { setErr('로그인 정보가 없어요. 처음부터 다시 시작해주세요.'); return; }
+    setSubmitting(true);
+    const payload = { round_id: round.id, cell_id: cell.id, dong, ho, name, amount };
+    let { res, d } = await postBid(payload);
+    if (res.status === 409 && d.error === 'already_bidding_elsewhere') {
+      const existing = cellsList.find(c => c.id === d.existing_cell_id);
+      const existingName = existing ? existing.n : '다른 구역';
+      const ok = window.confirm(`이미 ${existingName} 구역에 입찰 중이에요.\n세대당 한 구역만 입찰 가능합니다.\n${existingName} 입찰을 취소하고 ${spot}로 옮길까요?`);
+      if (!ok) { setSubmitting(false); return; }
+      ({ res, d } = await postBid({ ...payload, replace: true }));
+    }
     setSubmitting(false);
-    const d = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(d.error || '입찰 실패'); return; }
     go('complete', { spot, amount });
   };

@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 // Body: { round_id, cell_id, dong, ho, name, amount }
 export async function POST(req: Request) {
   const body = await req.json();
-  const { round_id, cell_id, dong, ho, name, amount } = body;
+  const { round_id, cell_id, dong, ho, name, amount, replace } = body;
   if (!round_id || !cell_id || !dong || !ho || !name || !amount) {
     return NextResponse.json({ error: "필수 필드 누락" }, { status: 400 });
   }
@@ -41,6 +41,32 @@ export async function POST(req: Request) {
   if (!round) return NextResponse.json({ error: "라운드를 찾을 수 없어요" }, { status: 404 });
   if (round.status !== "live") {
     return NextResponse.json({ error: "라운드가 마감되었거나 종료되었어요" }, { status: 400 });
+  }
+
+  // 세대당 한 구역 원칙: 같은 라운드에 이 세대가 다른 구역에 입찰 중이면 기존 입찰 삭제
+  if (replace) {
+    await sb
+      .from("bids")
+      .delete()
+      .eq("round_id", round_id)
+      .eq("dong", dong)
+      .eq("ho", ho)
+      .neq("cell_id", cell_id);
+  } else {
+    const { data: existing } = await sb
+      .from("bids")
+      .select("cell_id")
+      .eq("round_id", round_id)
+      .eq("dong", dong)
+      .eq("ho", ho)
+      .neq("cell_id", cell_id)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return NextResponse.json(
+        { error: "already_bidding_elsewhere", existing_cell_id: existing[0].cell_id },
+        { status: 409 }
+      );
+    }
   }
 
   // Find current top bid
