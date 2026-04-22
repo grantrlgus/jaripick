@@ -182,7 +182,7 @@ function JPNaverMap({ go }) {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>{picked.n}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.n900 }}>{picked.row}구역 {picked.n}번</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.n900 }}>{picked.row}-{picked.n}번</div>
                 <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>입찰 대상</div>
               </div>
               <JPDdayBadge days={3} />
