@@ -185,7 +185,7 @@ function LayoutEditorPage() {
     const id = 'c' + Date.now() + Math.floor(Math.random() * 1000);
     const name = nextName();
     const row = name.split('-')[0];
-    const newCell = { id, n: name, row, lat, lng, type: 'general', rot: 0 };
+    const newCell = { id, n: name, row, lat, lng, type: 'general', rot: 0, active: true };
     setCells(cs => [...cs, newCell]);
     setSel(id);
     setTab('info');
@@ -464,6 +464,31 @@ function LayoutEditorPage() {
                 </div>
                 <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                   지도에서 핀을 드래그해 위치를 옮길 수 있어요.
+                </div>
+              </div>
+
+              <div>
+                <label className="label">활성화</label>
+                <div
+                  onClick={() => updateCell(selected.id, { active: !(selected.active !== false) })}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 12px', border: '1px solid var(--n200)', borderRadius: 8,
+                    cursor: 'pointer', background: selected.active !== false ? '#ECFDF5' : '#fff',
+                  }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: selected.active !== false ? 'var(--success)' : 'var(--n500)' }}>
+                    {selected.active !== false ? '✓ 활성 — 입주민 앱에 노출' : '✕ 비활성 — 입주민 앱에 숨김'}
+                  </div>
+                  <div style={{
+                    width: 40, height: 22, borderRadius: 11,
+                    background: selected.active !== false ? 'var(--success)' : 'var(--n200)',
+                    position: 'relative', transition: 'background .2s',
+                  }}>
+                    <div style={{
+                      position: 'absolute', top: 2, left: selected.active !== false ? 20 : 2,
+                      width: 18, height: 18, borderRadius: 9, background: '#fff', transition: 'left .2s',
+                    }} />
+                  </div>
                 </div>
               </div>
 

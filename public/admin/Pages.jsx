@@ -12,7 +12,6 @@ function Sidebar({ active, go }) {
     { k: 'announce',   label: '📢  공지 발송' },
     { k: 'complaints', label: '💬  민원 / 문의' },
     { k: 'adminusers', label: '🔑  관리자 / 권한' },
-    { k: 'setup',      label: '🚀  초기 셋업' },
     { k: 'complex',    label: '⚙️  단지 설정' },
   ];
   return (
@@ -131,50 +130,62 @@ function Dashboard({ go }) {
 }
 
 // ─── Spots list ─────────────────────────────────────────────────
-function SpotsPage() {
+function SpotsPage({ go }) {
   const [filter, setFilter] = React.useState('all');
-  const rows = [
-    { n: 'A-23', kind: 'general',  avail: true,  bid: { count: 3, top: 180000 } },
-    { n: 'A-24', kind: 'general',  avail: false, bid: null },
-    { n: 'A-25', kind: 'ev',       avail: false, bid: null },
-    { n: 'A-26', kind: 'disabled', avail: false, bid: null },
-    { n: 'B-07', kind: 'general',  avail: true,  bid: { count: 1, top: 120000 } },
-    { n: 'B-08', kind: 'general',  avail: true,  bid: null },
-    { n: 'B-09', kind: 'general',  avail: true,  bid: { count: 2, top: 140000 } },
-    { n: 'B-10', kind: 'visitor',  avail: false, bid: null },
-    { n: 'C-03', kind: 'general',  avail: true,  bid: { count: 5, top: 200000 } },
-    { n: 'C-04', kind: 'general',  avail: false, bid: null },
-    { n: 'D-01', kind: 'general',  avail: true,  bid: null },
-  ];
+  const [cells, setCells] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const refetch = React.useCallback(() => {
+    setLoading(true);
+    fetch('/api/cells', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setCells(data); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  React.useEffect(() => { refetch(); }, [refetch]);
+
+  const toggleActive = async (id, next) => {
+    setCells(cs => cs.map(c => c.id === id ? { ...c, active: next } : c));
+    await fetch(`/api/cells/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: next }),
+    });
+  };
+
   const kindMeta = {
     general:  { label: '입찰 대상', cls: 'badge-success' },
-    ev:       { label: '⚡ 전기차 전용', cls: 'badge-neutral' },
-    disabled: { label: '♿ 장애인 전용',   cls: 'badge-neutral' },
-    visitor:  { label: '🚗 방문객 전용',   cls: 'badge-neutral' },
+    ev:       { label: '⚡ 전기차', cls: 'badge-neutral' },
+    disabled: { label: '♿ 장애인', cls: 'badge-neutral' },
+    visitor:  { label: '🚗 방문객', cls: 'badge-neutral' },
   };
-  const filtered = filter === 'all' ? rows
-    : filter === 'bid' ? rows.filter(r => r.kind === 'general')
-    : rows.filter(r => r.kind !== 'general');
-  const bidCount = rows.filter(r => r.kind === 'general').length;
+  const rows = [...cells].sort((a, b) => a.n.localeCompare(b.n));
+  const bidCount = rows.filter(r => (r.type || 'general') === 'general' && r.active !== false).length;
   const excludedCount = rows.length - bidCount;
+  const filtered = filter === 'all' ? rows
+    : filter === 'bid' ? rows.filter(r => (r.type || 'general') === 'general' && r.active !== false)
+    : rows.filter(r => (r.type || 'general') !== 'general' || r.active === false);
+
   return (
     <div>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 className="title" style={{ marginBottom: 2 }}>구역 목록</h1>
-          <p className="subtitle" style={{ marginBottom: 0 }}>입찰 대상 {bidCount}칸 · 제외 {excludedCount}칸 (전기차/장애인/방문객)</p>
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            활성 입찰 대상 {bidCount}칸 · 제외/비활성 {excludedCount}칸
+          </p>
         </div>
         <div className="row">
-          <input className="input" placeholder="🔍 구역 번호 검색" style={{ width: 220 }} />
-          <button className="btn btn-outline">CSV로 내보내기</button>
-          <button className="btn btn-primary">+ 구역 추가</button>
+          <button className="btn btn-outline" onClick={refetch}>🔄 새로고침</button>
+          <button className="btn btn-primary" onClick={() => go && go('layout')}>+ 구역 편집</button>
         </div>
       </div>
 
       <div className="row" style={{ marginBottom: 12 }}>
         <button className={filter === 'all' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setFilter('all')}>전체 {rows.length}</button>
         <button className={filter === 'bid' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setFilter('bid')}>입찰 대상 {bidCount}</button>
-        <button className={filter === 'excluded' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setFilter('excluded')}>제외 {excludedCount}</button>
+        <button className={filter === 'excluded' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setFilter('excluded')}>제외/비활성 {excludedCount}</button>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -183,31 +194,38 @@ function SpotsPage() {
             <tr>
               <th>번호</th>
               <th>유형</th>
-              <th>상태</th>
-              <th>입찰</th>
-              <th>최고가</th>
-              <th></th>
+              <th>좌표</th>
+              <th>사진</th>
+              <th>활성화</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => {
-              const meta = kindMeta[r.kind];
-              const isBid = r.kind === 'general';
+            {loading ? (
+              <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 20 }}>불러오는 중…</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 20 }}>구역이 없어요. 구역 설정에서 추가하세요.</td></tr>
+            ) : filtered.map(r => {
+              const meta = kindMeta[r.type || 'general'] || kindMeta.general;
+              const isActive = r.active !== false;
               return (
-                <tr key={r.n} style={{ opacity: isBid ? 1 : 0.6 }}>
+                <tr key={r.id} style={{ opacity: isActive ? 1 : 0.55 }}>
                   <td style={{ fontWeight: 700 }}>{r.n}</td>
                   <td><span className={`badge ${meta.cls}`}>{meta.label}</span></td>
+                  <td className="muted" style={{ fontSize: 12, fontFamily: 'monospace' }}>
+                    {r.lat.toFixed(5)}, {r.lng.toFixed(5)}
+                  </td>
                   <td>
-                    {!isBid ? <span className="muted">—</span>
-                      : r.avail ? <span className="badge badge-success">가능</span>
-                      : <span className="badge badge-neutral">마감</span>}
+                    {r.photo_url ? (
+                      <img src={r.photo_url} alt="" style={{ width: 42, height: 30, objectFit: 'cover', borderRadius: 4 }} />
+                    ) : <span className="muted">—</span>}
                   </td>
-                  <td>{r.bid ? `${r.bid.count}명` : <span className="muted">—</span>}</td>
-                  <td style={{ fontWeight: 600, color: r.bid ? 'var(--primary)' : 'var(--n400)' }}>
-                    {r.bid ? `${r.bid.top.toLocaleString()}원` : '—'}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>편집</button>
+                  <td>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={isActive} onChange={e => toggleActive(r.id, e.target.checked)} />
+                      <span style={{ fontSize: 12, color: isActive ? 'var(--success)' : 'var(--n400)' }}>
+                        {isActive ? '활성' : '비활성'}
+                      </span>
+                    </label>
                   </td>
                 </tr>
               );
@@ -217,7 +235,7 @@ function SpotsPage() {
       </div>
 
       <div className="card" style={{ marginTop: 12, background: 'var(--n50)', fontSize: 13, color: 'var(--n700)' }}>
-        💡 전기차 충전소, 장애인 전용, 방문객 구역은 입찰 대상에서 자동 제외됩니다. 각 구역의 <b>편집</b>에서 유형을 지정하세요.
+        💡 <b>활성화</b> 된 구역만 입주민 앱 지도/리스트에 노출됩니다. 비활성화하면 일시적으로 숨길 수 있어요.
       </div>
     </div>
   );
@@ -425,7 +443,7 @@ function ComplexPage() {
   return (
     <div>
       <h1 className="title">단지 설정</h1>
-      <p className="subtitle">단지 기본 정보와 입찰 규칙을 설정합니다.</p>
+      <p className="subtitle">단지 기본 정보 · 입찰 규칙 · 입주민 명단을 관리합니다.</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="card">
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>기본 정보</div>
@@ -463,7 +481,6 @@ function ComplexPage() {
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>입찰 규칙</div>
           <div className="stack">
             <div className="row">
-              <div className="grow"><label className="label">계약 기간</label><select className="input"><option>3개월</option><option>6개월</option><option>12개월</option></select></div>
               <div className="grow"><label className="label">최소 입찰가</label><input className="input" defaultValue="50,000원" /></div>
               <div className="grow"><label className="label">입찰 규칙</label>
                 <input className="input" value="최고가 초과만 가능 (동점 방지)" readOnly style={{ background: 'var(--n50)' }} />
@@ -475,12 +492,148 @@ function ComplexPage() {
                 <b>관리비 합산</b> · 1개월 초과 계약은 <b>개월별 분할</b>로 관리비에 자동 포함됩니다.
               </div>
             </div>
+            <div className="muted" style={{ fontSize: 12 }}>
+              💡 계약 기간은 <b>라운드 마법사</b>에서 라운드별로 달력으로 지정합니다.
+            </div>
           </div>
+        </div>
+        <div className="card" style={{ gridColumn: '1 / 3' }}>
+          <HouseholdSection />
         </div>
       </div>
       <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
         <button className="btn btn-ghost">취소</button>
         <button className="btn btn-primary">저장</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Household list section (inside 단지 설정) ──────────────────
+function HouseholdSection() {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState('');
+  const [adding, setAdding] = React.useState(false);
+  const [form, setForm] = React.useState({ dong: '', ho: '', name: '', phone: '' });
+  const fileRef = React.useRef(null);
+
+  const refetch = React.useCallback(() => {
+    setLoading(true);
+    fetch('/api/households?complex=heliocity', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setRows(d); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  React.useEffect(() => { refetch(); }, [refetch]);
+
+  const addOne = async () => {
+    if (!form.dong || !form.ho || !form.name) { setErr('동/호/이름 필수'); return; }
+    setErr('');
+    const res = await fetch('/api/households', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complex: 'heliocity', ...form }),
+    });
+    if (!res.ok) { setErr((await res.json()).error || '추가 실패'); return; }
+    setForm({ dong: '', ho: '', name: '', phone: '' });
+    setAdding(false);
+    refetch();
+  };
+
+  const removeOne = async (id) => {
+    if (!confirm('삭제하시겠어요?')) return;
+    await fetch(`/api/households?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    refetch();
+  };
+
+  const parseCsv = (text) => {
+    const lines = text.trim().split(/\r?\n/);
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(',').map(s => s.trim());
+      if (i === 0 && /동/.test(parts[0])) continue; // skip header
+      const [dong, ho, name, phone] = parts;
+      if (dong && ho && name) out.push({ dong, ho, name, phone: phone || null });
+    }
+    return out;
+  };
+
+  const uploadCsv = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    if (rows.length === 0) { setErr('CSV에서 읽은 행이 없어요'); return; }
+    if (!confirm(`${rows.length}건을 입주민 명단에 일괄 업로드할까요?\n(기존 명단은 교체됩니다)`)) return;
+    const res = await fetch('/api/households', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complex: 'heliocity', rows }),
+    });
+    if (!res.ok) { setErr('업로드 실패'); return; }
+    setErr('');
+    refetch();
+  };
+
+  return (
+    <div>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>입주민 명단</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            카카오 로그인 후 실명+동·호가 명단과 일치하면 자동 승인됩니다.
+          </div>
+        </div>
+        <div className="row">
+          <a className="btn btn-outline" href="/admin/household-template.csv" download>📄 양식 다운로드</a>
+          <button className="btn btn-outline" onClick={() => fileRef.current && fileRef.current.click()}>📥 CSV 업로드</button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={uploadCsv} style={{ display: 'none' }} />
+          <button className="btn btn-primary" onClick={() => setAdding(v => !v)}>+ 세대 추가</button>
+        </div>
+      </div>
+
+      {adding && (
+        <div className="row" style={{ marginBottom: 12, gap: 8 }}>
+          <input className="input" placeholder="동" value={form.dong} onChange={e => setForm(f => ({ ...f, dong: e.target.value }))} style={{ width: 80 }} />
+          <input className="input" placeholder="호" value={form.ho} onChange={e => setForm(f => ({ ...f, ho: e.target.value }))} style={{ width: 100 }} />
+          <input className="input" placeholder="이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={{ width: 140 }} />
+          <input className="input" placeholder="연락처 (선택)" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} style={{ width: 180 }} />
+          <button className="btn btn-primary" onClick={addOne}>저장</button>
+          <button className="btn btn-ghost" onClick={() => { setAdding(false); setErr(''); }}>취소</button>
+        </div>
+      )}
+      {err && <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 8 }}>{err}</div>}
+
+      <div style={{ border: '1px solid var(--n100)', borderRadius: 8, overflow: 'hidden' }}>
+        <table className="table">
+          <thead>
+            <tr><th>동</th><th>호</th><th>이름</th><th>연락처</th><th>등록일</th><th></th></tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 16 }}>불러오는 중…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 16 }}>명단이 비어있어요. CSV 업로드로 시작하세요.</td></tr>
+            ) : rows.map(r => (
+              <tr key={r.id}>
+                <td>{r.dong}</td>
+                <td>{r.ho}</td>
+                <td style={{ fontWeight: 600 }}>{r.name}</td>
+                <td className="muted">{r.phone || '—'}</td>
+                <td className="muted" style={{ fontSize: 12 }}>{(r.created_at || '').slice(0, 10)}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <button className="btn btn-ghost" onClick={() => removeOne(r.id)} style={{ height: 28, fontSize: 12, padding: '0 10px', color: 'var(--danger)' }}>삭제</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+        총 {rows.length}세대 등록됨
       </div>
     </div>
   );

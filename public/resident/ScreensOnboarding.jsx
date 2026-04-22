@@ -88,7 +88,36 @@ function PhoneAuthScreen({ go }) {
 function ComplexRegisterScreen({ go }) {
   const [dong, setDong] = React.useState('101');
   const [ho, setHo] = React.useState('1201');
+  const [name, setName] = React.useState('');
   const [selected, setSelected] = React.useState('heliocity');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/residents/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ complex: selected, dong, ho, name }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (d.status === 'approved') {
+        go('home');
+      } else if (d.status === 'name_mismatch') {
+        setError('등록된 세대주 이름과 일치하지 않아요. 관리자 승인이 필요합니다.');
+        go('pending');
+      } else {
+        setError('명단에서 찾을 수 없어 관리자 승인이 필요해요.');
+        go('pending');
+      }
+    } catch (e) {
+      go('pending');
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const complexes = [
     { k: 'heliocity', n: '오금현대', a: '서울 송파구 올림픽로 300', status: '활성' },
     { k: 'raemian',  n: '래미안 위례',  a: '서울 송파구 위례광장로 200', status: '활성' },
@@ -97,7 +126,7 @@ function ComplexRegisterScreen({ go }) {
   return (
     <JPScreen bg={C.white}>
       <div style={{ padding: '64px 20px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <button onClick={() => go('phone_auth')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, alignSelf: 'flex-start', cursor: 'pointer', color: C.n700 }}>‹</button>
+        <button onClick={() => go('login')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, alignSelf: 'flex-start', cursor: 'pointer', color: C.n700 }}>‹</button>
         <div>
           <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.25 }}>
             거주 중인 단지를<br/>알려주세요
@@ -137,16 +166,29 @@ function ComplexRegisterScreen({ go }) {
         <div>
           <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>동 / 호수</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input value={dong} onChange={e => setDong(e.target.value)}
+            <input value={dong} onChange={e => setDong(e.target.value)} placeholder="동"
               style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
-            <input value={ho} onChange={e => setHo(e.target.value)}
+            <input value={ho} onChange={e => setHo(e.target.value)} placeholder="호"
               style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
           </div>
         </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>이름</div>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="세대주 이름"
+            style={{ width: '100%', height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none', boxSizing: 'border-box' }} />
+          <div style={{ fontSize: 11, color: C.n400, marginTop: 6 }}>
+            관리자가 등록한 명단과 일치하면 즉시 승인돼요
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: '10px 12px', background: C.warningLight || '#FEF3C7', color: '#92400E', borderRadius: 8, fontSize: 12 }}>{error}</div>
+        )}
       </div>
 
       <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
-        <JPPrimaryButton label="승인 요청하기" disabled={!dong || !ho} onClick={() => go('vehicle')} />
+        <JPPrimaryButton label={submitting ? '확인 중…' : '승인 요청하기'} disabled={!dong || !ho || !name || submitting} onClick={submit} />
       </div>
     </JPScreen>
   );

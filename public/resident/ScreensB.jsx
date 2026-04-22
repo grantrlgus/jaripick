@@ -13,7 +13,7 @@ function JPNaverMap({ go }) {
   const refetch = React.useCallback(() => {
     fetch('/api/cells', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
-      .then(data => { if (Array.isArray(data)) setCells(data); })
+      .then(data => { if (Array.isArray(data)) setCells(data.filter(c => c.active !== false)); })
       .catch(() => {});
   }, []);
 

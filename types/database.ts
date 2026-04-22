@@ -66,6 +66,7 @@ export type Database = {
           rot: number;
           type: string;
           photo_url: string | null;
+          active: boolean;
           updated_at: string;
         };
         Insert: {
@@ -77,6 +78,7 @@ export type Database = {
           rot?: number;
           type?: string;
           photo_url?: string | null;
+          active?: boolean;
           updated_at?: string;
         };
         Update: Partial<{
@@ -87,6 +89,38 @@ export type Database = {
           rot: number;
           type: string;
           photo_url: string | null;
+          active: boolean;
+        }>;
+        Relationships: [];
+      };
+      households: {
+        Row: {
+          id: string;
+          complex: string;
+          dong: string;
+          ho: string;
+          name: string;
+          phone: string | null;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex?: string;
+          dong: string;
+          ho: string;
+          name: string;
+          phone?: string | null;
+          status?: string;
+          created_at?: string;
+        };
+        Update: Partial<{
+          complex: string;
+          dong: string;
+          ho: string;
+          name: string;
+          phone: string | null;
+          status: string;
         }>;
         Relationships: [];
       };

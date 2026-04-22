@@ -18,7 +18,7 @@ function LoginScreen({ go }) {
         <div style={{ fontSize: 14, color: C.n500 }}>아파트 주차 구역 입찰 서비스</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', paddingBottom: 40 }}>
-        <button onClick={() => go('home')} style={{
+        <button onClick={() => go('complex_register')} style={{
           background: C.kakao, height: 52, borderRadius: 12, border: 0,
           fontSize: 16, fontWeight: 700, color: '#191919', cursor: 'pointer', fontFamily: jpFont,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,

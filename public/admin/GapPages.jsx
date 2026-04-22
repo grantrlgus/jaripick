@@ -6,145 +6,24 @@
 const fmt = (n) => n.toLocaleString() + '원';
 const today = '2026-04-20';
 
-// ─── AG1: Complex Initial Setup Wizard ──────────────────────────
-function SetupWizard({ go }) {
-  const [step, setStep] = React.useState(1);
-  const [fetched, setFetched] = React.useState(false);
-  const steps = ['단지 정보', '도면 업로드', '입주민 명단', '입찰 규칙'];
-
-  return (
-    <div>
-      <h1 className="title">단지 초기 셋업</h1>
-      <p className="subtitle">4단계로 시작해보세요. 언제든 중단하고 돌아올 수 있어요.</p>
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 0 }}>
-          {steps.map((s, i) => {
-            const n = i + 1, done = step > n, active = step === n;
-            return (
-              <div key={s} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '0 0 auto' }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: done ? 'var(--success)' : active ? 'var(--primary)' : 'var(--n100)',
-                    color: done || active ? '#fff' : 'var(--n500)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 700,
-                  }}>{done ? '✓' : n}</div>
-                  <div style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? 'var(--n900)' : 'var(--n500)' }}>{s}</div>
-                </div>
-                {i < steps.length - 1 && <div style={{ flex: 1, height: 2, background: done ? 'var(--success)' : 'var(--n100)', margin: '0 12px' }} />}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="card" style={{ minHeight: 360 }}>
-        {step === 1 && (
-          <div className="stack">
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>1. 단지 정보</div>
-            <div><label className="label">단지명</label><input className="input" defaultValue="오금현대" /></div>
-            <div><label className="label">주소</label><input className="input" defaultValue="서울특별시 송파구 오금로 223" /></div>
-            <div style={{ background: 'var(--primary-light)', padding: 14, borderRadius: 8 }}>
-              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>🏢 공공데이터 자동 불러오기</div>
-                  <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>K-apt 공동주택관리정보시스템에서 단지 기본 정보를 가져옵니다.</div>
-                </div>
-                <button className="btn btn-primary" onClick={() => setFetched(true)}>불러오기</button>
-              </div>
-              {fetched && (
-                <div style={{ marginTop: 12, padding: 12, background: '#fff', borderRadius: 6, fontSize: 13 }}>
-                  ✓ 불러왔어요<br/>
-                  <span className="muted">총 세대 수 · <b style={{ color: 'var(--n900)' }}>1,124세대</b> &nbsp;·&nbsp; 공식 주차대수 · <b style={{ color: 'var(--n900)' }}>1,350대</b></span>
-                </div>
-              )}
-            </div>
-            <div className="row">
-              <div className="grow"><label className="label">총 세대 수</label><input className="input" defaultValue={fetched ? '1,124' : ''} placeholder="자동 입력" /></div>
-              <div className="grow"><label className="label">공식 주차대수 <span className="muted">(공공데이터)</span></label><input className="input" defaultValue={fetched ? '1,350' : ''} placeholder="자동 입력" /></div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="stack">
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>2. 도면 업로드</div>
-            <div style={{ border: '2px dashed var(--n200)', borderRadius: 12, padding: 40, textAlign: 'center', background: 'var(--n50)' }}>
-              <div style={{ fontSize: 36 }}>📄</div>
-              <div style={{ marginTop: 12, fontSize: 14, fontWeight: 600 }}>주차장 도면을 업로드하세요</div>
-              <div className="muted" style={{ marginTop: 4 }}>PDF · PNG · JPG (최대 10MB)</div>
-              <button className="btn btn-outline" style={{ marginTop: 14 }}>파일 선택</button>
-            </div>
-            <div className="muted">업로드 후 <b style={{ color: 'var(--n900)' }}>구역 목록</b>에서 각 구역의 유형(입찰 대상 / 전기차 / 장애인 / 방문객)을 지정하세요.</div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="stack">
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>3. 입주민 명단 업로드</div>
-            <div className="muted" style={{ marginBottom: 8 }}>
-              카카오 실명과 명단이 일치하면 <b style={{ color: 'var(--n900)' }}>자동 승인</b>됩니다.<br/>
-              일치하지 않으면 관리사무소에서 수동 승인합니다.
-            </div>
-            <div style={{ border: '2px dashed var(--primary)', borderRadius: 12, padding: 24, textAlign: 'center', background: 'var(--primary-light)' }}>
-              <div style={{ fontSize: 28 }}>📋</div>
-              <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>입주민 명단 CSV 업로드</div>
-              <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>컬럼: 동, 호, 실명, 연락처(선택)</div>
-              <div className="row" style={{ justifyContent: 'center', marginTop: 12 }}>
-                <button className="btn btn-outline">양식 다운로드</button>
-                <button className="btn btn-primary">CSV 선택</button>
-              </div>
-            </div>
-            <div style={{ background: 'var(--n50)', padding: 12, borderRadius: 8, fontSize: 12 }} className="muted">
-              💡 이미 업로드된 명단은 <b>입주민 승인</b> 페이지에서 언제든 추가/수정할 수 있어요.
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="stack">
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>4. 입찰 규칙</div>
-            <div className="row">
-              <div className="grow">
-                <label className="label">계약 기간</label>
-                <select className="input"><option>3개월</option><option>6개월</option><option>12개월</option></select>
-              </div>
-              <div className="grow"><label className="label">최소 입찰가</label><input className="input" defaultValue="50,000원" /></div>
-            </div>
-            <div>
-              <label className="label">입찰 규칙</label>
-              <div style={{ background: 'var(--n50)', padding: 12, borderRadius: 8, fontSize: 13 }}>
-                <b>최고가 초과만 입찰 가능</b> · 현재 최고가보다 높은 금액만 입찰할 수 있어 동점이 발생하지 않습니다.
-              </div>
-            </div>
-            <div>
-              <label className="label">결제 방식</label>
-              <div style={{ background: 'var(--n50)', padding: 12, borderRadius: 8, fontSize: 13 }}>
-                <b>관리비 합산</b> · 계약 기간이 1개월 초과이면 <b>개월별 분할</b>로 관리비에 포함됩니다.
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="row" style={{ justifyContent: 'space-between', marginTop: 16 }}>
-        <button className="btn btn-ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1}>이전</button>
-        {step < 4
-          ? <button className="btn btn-primary" onClick={() => setStep(s => s + 1)}>다음 →</button>
-          : <button className="btn btn-primary" onClick={() => go('dashboard')}>완료하고 대시보드로</button>}
-      </div>
-    </div>
-  );
-}
-
 // ─── AG2: Round Wizard ───────────────────────────────────────────
 function RoundWizardPage({ go }) {
   const [phase, setPhase] = React.useState('create');
-  const [months, setMonths] = React.useState(3);
-  const start = '2026-05-01';
-  const endMap = { 1: '2026-05-31', 3: '2026-07-31', 6: '2026-10-31', 12: '2027-04-30' };
+  const [bidStartDate, setBidStartDate] = React.useState('2026-04-15');
+  const [bidStartTime, setBidStartTime] = React.useState('09:00');
+  const [bidEndDate, setBidEndDate] = React.useState('2026-04-22');
+  const [bidEndTime, setBidEndTime] = React.useState('18:00');
+  const [contractStart, setContractStart] = React.useState('2026-05-01');
+  const [contractEnd, setContractEnd] = React.useState('2026-07-31');
+  const [activeCount, setActiveCount] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/api/cells').then(r => r.json()).then(d => {
+      const cells = Array.isArray(d) ? d : (d.cells || []);
+      const n = cells.filter(c => c.active !== false && c.type !== 'excluded').length;
+      setActiveCount(n);
+    }).catch(() => setActiveCount(0));
+  }, []);
 
   return (
     <div>
@@ -165,27 +44,46 @@ function RoundWizardPage({ go }) {
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>① 새 라운드 생성</div>
           <div className="stack">
             <div><label className="label">라운드 이름</label><input className="input" defaultValue="2026년 5월 라운드" /></div>
-            <div className="row">
-              <div className="grow"><label className="label">입찰 시작</label><input className="input" defaultValue="2026-04-15 09:00" /></div>
-              <div className="grow"><label className="label">입찰 마감</label><input className="input" defaultValue="2026-04-22 18:00" /></div>
-            </div>
-            <div className="row">
-              <div className="grow">
-                <label className="label">계약 기간</label>
-                <select className="input" value={months} onChange={e => setMonths(Number(e.target.value))}>
-                  <option value="1">1개월</option><option value="3">3개월</option><option value="6">6개월</option><option value="12">12개월</option>
-                </select>
+            <div>
+              <label className="label">입찰 기간</label>
+              <div className="row">
+                <div className="grow">
+                  <div className="row" style={{ gap: 6 }}>
+                    <input type="date" className="input" value={bidStartDate} onChange={e => setBidStartDate(e.target.value)} style={{ flex: 2 }} />
+                    <input type="time" className="input" value={bidStartTime} onChange={e => setBidStartTime(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>시작</div>
+                </div>
+                <div className="grow">
+                  <div className="row" style={{ gap: 6 }}>
+                    <input type="date" className="input" value={bidEndDate} onChange={e => setBidEndDate(e.target.value)} style={{ flex: 2 }} />
+                    <input type="time" className="input" value={bidEndTime} onChange={e => setBidEndTime(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>마감</div>
+                </div>
               </div>
-              <div className="grow">
-                <label className="label">실제 계약 기간 <span className="muted">(자동)</span></label>
-                <input className="input" value={`${start} ~ ${endMap[months]}`} readOnly style={{ background: 'var(--n50)' }} />
+            </div>
+            <div>
+              <label className="label">계약 기간</label>
+              <div className="row">
+                <div className="grow">
+                  <input type="date" className="input" value={contractStart} onChange={e => setContractStart(e.target.value)} />
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>시작</div>
+                </div>
+                <div className="grow">
+                  <input type="date" className="input" value={contractEnd} onChange={e => setContractEnd(e.target.value)} />
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>종료</div>
+                </div>
               </div>
             </div>
             <div>
               <label className="label">대상 구역</label>
-              <select className="input"><option>입찰 가능 구역 전체 (18칸)</option><option>지하 1층만 (9칸)</option></select>
-              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                전기차·장애인·방문객 구역은 자동 제외됩니다.
+              <div style={{ padding: '10px 12px', background: 'var(--n50)', borderRadius: 8, fontSize: 13 }}>
+                <b>활성화된 주차 구역 전체</b>
+                {activeCount !== null && <span className="muted"> · {activeCount}칸</span>}
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  비활성화된 구역과 전기차·장애인·방문객 구역은 자동 제외됩니다.
+                </div>
               </div>
             </div>
             <div style={{ background: 'var(--n50)', padding: 12, borderRadius: 8, fontSize: 12 }} className="muted">
@@ -654,5 +552,5 @@ function AdminUsersPage() {
 }
 
 Object.assign(window, {
-  SetupWizard, RoundWizardPage, ComplaintsPage, AnnouncePage, PaymentsPage, AdminUsersPage,
+  RoundWizardPage, ComplaintsPage, AnnouncePage, PaymentsPage, AdminUsersPage,
 });
