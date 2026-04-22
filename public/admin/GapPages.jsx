@@ -283,12 +283,50 @@ function AnnouncePage() {
   const [title, setTitle] = React.useState('');
   const [body, setBody] = React.useState('');
   const [tplId, setTplId] = React.useState(null);
+  const [sending, setSending] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+  const [notices, setNotices] = React.useState([]);
+  const [approvedCount, setApprovedCount] = React.useState(0);
+
+  const refetch = React.useCallback(() => {
+    fetch('/api/notices?complex=heliocity', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setNotices(Array.isArray(d) ? d : []));
+    fetch('/api/residents/requests?status=approved', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setApprovedCount(Array.isArray(d) ? d.length : 0));
+  }, []);
+  React.useEffect(() => { refetch(); }, [refetch]);
 
   const applyTpl = (tpl) => {
     setTarget(tpl.target);
     setTitle(tpl.title);
     setBody(tpl.body);
     setTplId(tpl.id);
+  };
+
+  const send = async () => {
+    if (!title.trim() || !body.trim()) { setMsg('제목과 본문을 입력해주세요'); return; }
+    setSending(true); setMsg('');
+    const res = await fetch('/api/notices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complex: 'heliocity', target, title, body }),
+    });
+    setSending(false);
+    if (!res.ok) { setMsg((await res.json()).error || '발송 실패'); return; }
+    setMsg('발송되었습니다');
+    setTitle(''); setBody(''); setTplId(null);
+    refetch();
+    setTimeout(() => setMsg(''), 2500);
+  };
+
+  const relT = (iso) => {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 3600) return `${Math.max(1, Math.floor(diff / 60))}분 전`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}일 전`;
+    return new Date(iso).toLocaleDateString('ko-KR');
   };
 
   return (
@@ -335,9 +373,11 @@ function AnnouncePage() {
             <label className="row" style={{ fontSize: 13 }}>
               <input type="checkbox" defaultChecked /> 푸시 알림도 함께 발송
             </label>
+            {msg && <div className="muted" style={{ fontSize: 12 }}>{msg}</div>}
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="btn btn-ghost">임시저장</button>
-              <button className="btn btn-primary">발송 (248명)</button>
+              <button className="btn btn-primary" onClick={send} disabled={sending}>
+                {sending ? '발송 중…' : `발송 (${approvedCount}명)`}
+              </button>
             </div>
           </div>
         </div>
@@ -345,17 +385,13 @@ function AnnouncePage() {
         <div className="card" style={{ padding: 0 }}>
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>지난 공지</div>
           <div className="stack" style={{ gap: 0 }}>
-            {[
-              { t: '2026년 4월 라운드 결과가 발표됐어요', a: '어제 · 324명', s: 'sent' },
-              { t: '2026년 4월 라운드 시작 안내', a: '1주 전 · 324명', s: 'sent' },
-              { t: '주차장 청소 안내 (4/5 08:00~12:00)', a: '2주 전 · 324명', s: 'sent' },
-              { t: '(임시저장) 정기 점검 안내', a: '2주 전', s: 'draft' },
-            ].map((r, i, arr) => (
-              <div key={i} style={{ padding: '12px 16px', borderBottom: i === arr.length - 1 ? 0 : '1px solid var(--n100)' }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{r.t}</div>
+            {notices.length === 0 ? (
+              <div style={{ padding: 16 }} className="muted">아직 발송된 공지가 없어요.</div>
+            ) : notices.map((r, i, arr) => (
+              <div key={r.id} style={{ padding: '12px 16px', borderBottom: i === arr.length - 1 ? 0 : '1px solid var(--n100)' }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{r.title}</div>
                 <div className="row" style={{ marginTop: 4 }}>
-                  <span className="muted" style={{ flex: 1 }}>{r.a}</span>
-                  {r.s === 'draft' && <span className="badge badge-warn">임시저장</span>}
+                  <span className="muted" style={{ flex: 1 }}>{relT(r.sent_at)} · {r.recipient_count || 0}명</span>
                 </div>
               </div>
             ))}

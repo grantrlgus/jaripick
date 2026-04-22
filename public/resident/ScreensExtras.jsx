@@ -89,7 +89,16 @@ function SettingsScreen({ go }) {
           ))}
         </div>
 
-        <button onClick={() => go('login')} style={{
+        <button onClick={() => {
+          if (!confirm('로그아웃 하시겠어요?')) return;
+          try {
+            localStorage.removeItem('jp_request_id');
+            localStorage.removeItem('jp_dong');
+            localStorage.removeItem('jp_ho');
+            localStorage.removeItem('jp_name');
+          } catch {}
+          go('login');
+        }} style={{
           height: 48, background: C.white, borderRadius: 12, border: 0,
           color: C.danger, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: jpFont,
           boxShadow: '0 1px 4px rgba(0,0,0,.06)',

@@ -124,6 +124,165 @@ export type Database = {
         }>;
         Relationships: [];
       };
+      resident_requests: {
+        Row: {
+          id: string;
+          complex: string;
+          dong: string;
+          ho: string;
+          name: string;
+          phone: string | null;
+          car_plate: string | null;
+          car_size: string | null;
+          ev: boolean;
+          reason: string | null;
+          status: string;
+          auto: boolean;
+          created_at: string;
+          decided_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          complex?: string;
+          dong: string;
+          ho: string;
+          name: string;
+          phone?: string | null;
+          car_plate?: string | null;
+          car_size?: string | null;
+          ev?: boolean;
+          reason?: string | null;
+          status?: string;
+          auto?: boolean;
+          created_at?: string;
+          decided_at?: string | null;
+        };
+        Update: Partial<{
+          status: string;
+          decided_at: string | null;
+          reason: string | null;
+          phone: string | null;
+          car_plate: string | null;
+          car_size: string | null;
+          ev: boolean;
+        }>;
+        Relationships: [];
+      };
+      rounds: {
+        Row: {
+          id: string;
+          complex: string;
+          name: string;
+          bid_start: string;
+          bid_end: string;
+          contract_start: string;
+          contract_end: string;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex?: string;
+          name: string;
+          bid_start: string;
+          bid_end: string;
+          contract_start: string;
+          contract_end: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: Partial<{
+          name: string;
+          bid_start: string;
+          bid_end: string;
+          contract_start: string;
+          contract_end: string;
+          status: string;
+        }>;
+        Relationships: [];
+      };
+      bids: {
+        Row: {
+          id: string;
+          round_id: string;
+          cell_id: string;
+          dong: string;
+          ho: string;
+          name: string;
+          amount: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          round_id: string;
+          cell_id: string;
+          dong: string;
+          ho: string;
+          name: string;
+          amount: number;
+          created_at?: string;
+        };
+        Update: Partial<{
+          amount: number;
+        }>;
+        Relationships: [];
+      };
+      complex_config: {
+        Row: {
+          complex: string;
+          name: string | null;
+          address: string | null;
+          total_units: number | null;
+          min_bid: number;
+          bid_rule: string;
+          payment_mode: string;
+          updated_at: string;
+        };
+        Insert: {
+          complex?: string;
+          name?: string | null;
+          address?: string | null;
+          total_units?: number | null;
+          min_bid?: number;
+          bid_rule?: string;
+          payment_mode?: string;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          name: string | null;
+          address: string | null;
+          total_units: number | null;
+          min_bid: number;
+          bid_rule: string;
+          payment_mode: string;
+        }>;
+        Relationships: [];
+      };
+      notices: {
+        Row: {
+          id: string;
+          complex: string;
+          target: string;
+          title: string;
+          body: string;
+          sent_at: string;
+          recipient_count: number;
+        };
+        Insert: {
+          id?: string;
+          complex?: string;
+          target?: string;
+          title: string;
+          body: string;
+          sent_at?: string;
+          recipient_count?: number;
+        };
+        Update: Partial<{
+          title: string;
+          body: string;
+        }>;
+        Relationships: [];
+      };
       apartment_interest_signals: {
         Row: {
           id: string;

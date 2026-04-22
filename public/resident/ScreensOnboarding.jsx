@@ -103,13 +103,17 @@ function ComplexRegisterScreen({ go }) {
         body: JSON.stringify({ complex: selected, dong, ho, name }),
       });
       const d = await r.json().catch(() => ({}));
+      if (d.request_id) {
+        try {
+          localStorage.setItem('jp_request_id', d.request_id);
+          localStorage.setItem('jp_dong', dong);
+          localStorage.setItem('jp_ho', ho);
+          localStorage.setItem('jp_name', name);
+        } catch {}
+      }
       if (d.status === 'approved') {
         go('home');
-      } else if (d.status === 'name_mismatch') {
-        setError('등록된 세대주 이름과 일치하지 않아요. 관리자 승인이 필요합니다.');
-        go('pending');
       } else {
-        setError('명단에서 찾을 수 없어 관리자 승인이 필요해요.');
         go('pending');
       }
     } catch (e) {
@@ -280,35 +284,67 @@ function VehicleScreen({ go }) {
 }
 
 function PendingScreen({ go }) {
+  const [status, setStatus] = React.useState('pending');
+  const [rejected, setRejected] = React.useState(false);
+  const info = React.useMemo(() => {
+    try {
+      return {
+        dong: localStorage.getItem('jp_dong') || '',
+        ho: localStorage.getItem('jp_ho') || '',
+        name: localStorage.getItem('jp_name') || '',
+        id: localStorage.getItem('jp_request_id') || '',
+      };
+    } catch { return { dong: '', ho: '', name: '', id: '' }; }
+  }, []);
+
+  React.useEffect(() => {
+    if (!info.id) return;
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/residents/requests/${info.id}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.status === 'approved') { setStatus('approved'); setTimeout(() => go('home'), 800); }
+        else if (d.status === 'rejected') { setStatus('rejected'); setRejected(true); }
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => clearInterval(t);
+  }, [info.id, go]);
+
+  const icon = rejected ? '✕' : status === 'approved' ? '✓' : '🕐';
+  const iconBg = rejected ? '#FEE2E2' : status === 'approved' ? C.successLight : C.warningLight;
+  const title = rejected ? '승인이 거절되었어요' : status === 'approved' ? '승인되었어요!' : '관리자가 확인 중이에요';
+
   return (
     <JPScreen bg={C.n50} style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 32px', gap: 16 }}>
         <div style={{
-          width: 96, height: 96, borderRadius: 48, background: C.warningLight,
+          width: 96, height: 96, borderRadius: 48, background: iconBg,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 44,
-        }}>🕐</div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: C.n900, textAlign: 'center' }}>
-          관리자가 확인 중이에요
-        </div>
+        }}>{icon}</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: C.n900, textAlign: 'center' }}>{title}</div>
         <div style={{ fontSize: 14, color: C.n500, textAlign: 'center', lineHeight: 1.6 }}>
-          승인되면 알림을 보내드려요.<br/>
-          보통 <b style={{ color: C.n900 }}>1–2일</b> 정도 걸려요.
+          {rejected ? '명단이 갱신된 후 다시 요청해주세요.'
+            : status === 'approved' ? '곧 홈으로 이동해요...'
+            : <>승인되면 알림을 보내드려요.<br/>자동으로 확인하고 있어요.</>}
         </div>
-        <div style={{
-          width: '100%', marginTop: 12, background: C.white, borderRadius: 12, padding: 16,
-          boxShadow: '0 1px 4px rgba(0,0,0,.05)',
-        }}>
-          <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>신청 정보</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>오금현대 101동 1201호</div>
-          <div style={{ fontSize: 12, color: C.n500, marginTop: 4 }}>차량 12가 3456 · 2026-04-20 09:32 신청</div>
-        </div>
+        {info.dong && (
+          <div style={{
+            width: '100%', marginTop: 12, background: C.white, borderRadius: 12, padding: 16,
+            boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+          }}>
+            <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>신청 정보</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{info.name} · {info.dong}동 {info.ho}호</div>
+          </div>
+        )}
       </div>
       <div style={{ padding: '0 20px 32px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <JPSecondaryButton label="승인됐어요 (데모)" onClick={() => go('home')} />
-        <button onClick={() => go('login')} style={{
+        <button onClick={() => { try { localStorage.removeItem('jp_request_id'); } catch {}; go('login'); }} style={{
           height: 44, border: 0, background: 'transparent', color: C.n500, fontSize: 13,
           cursor: 'pointer', fontFamily: jpFont,
-        }}>로그아웃</button>
+        }}>처음으로</button>
       </div>
     </JPScreen>
   );

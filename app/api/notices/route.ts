@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+const DEFAULT_COMPLEX = "heliocity";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const complex = searchParams.get("complex") || DEFAULT_COMPLEX;
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("notices")
+    .select("*")
+    .eq("complex", complex)
+    .order("sent_at", { ascending: false })
+    .limit(50);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data || []);
+}
+
+// POST { complex?, target, title, body } — logs the notice (demo: no actual push).
+export async function POST(req: Request) {
+  const body = await req.json();
+  const complex = body.complex || DEFAULT_COMPLEX;
+  const target = body.target || "all";
+  const title = String(body.title || "").trim();
+  const content = String(body.body || "").trim();
+  if (!title || !content) {
+    return NextResponse.json({ error: "제목과 본문을 입력해주세요" }, { status: 400 });
+  }
+  const sb = createServiceClient();
+
+  // Count recipients (approved resident_requests)
+  let recipient_count = 0;
+  const { count } = await sb
+    .from("resident_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("complex", complex)
+    .eq("status", "approved");
+  recipient_count = count || 0;
+
+  const { data, error } = await sb
+    .from("notices")
+    .insert({ complex, target, title, body: content, recipient_count })
+    .select()
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}

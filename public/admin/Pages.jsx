@@ -66,21 +66,28 @@ function AdminLogin({ go }) {
 
 // ─── Dashboard ──────────────────────────────────────────────────
 function Dashboard({ go }) {
+  const [data, setData] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/api/dashboard?complex=heliocity', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).then(setData);
+  }, []);
+
   const stats = [
-    { l: '공식 주차대수', v: '1,350', sub: '공공데이터', highlight: false },
-    { l: '입찰 가능 대수', v: 18, sub: '관리자 지정', highlight: false },
-    { l: '승인 대기 입주민', v: 3, sub: '자동승인 실패', highlight: true },
-    { l: '진행 중 라운드', v: 1, sub: 'D-3 마감' },
+    { l: '총 구역', v: data ? data.cells.total : '—', sub: '등록된 칸' },
+    { l: '입찰 가능 대수', v: data ? data.cells.active_bid_cells : '—', sub: '활성·일반' },
+    { l: '승인 대기 입주민', v: data ? data.residents.pending : '—', sub: '자동승인 실패', highlight: (data?.residents.pending || 0) > 0 },
+    { l: '진행 중 라운드', v: data && data.live_round ? 1 : 0, sub: data && data.live_round ? `D-${data.live_round.days_left} 마감` : '없음' },
   ];
   const links = [
     { k: 'spots', t: '🅿️ 구역 목록', d: '입찰 대상/제외 구역을 번호로 지정.' },
-    { k: 'residents', t: '👥 입주민', d: '3명이 수동 승인을 기다리고 있어요.' },
+    { k: 'residents', t: '👥 입주민', d: data && data.residents.pending > 0 ? `${data.residents.pending}명이 수동 승인을 기다리고 있어요.` : '가입 요청을 관리합니다.' },
     { k: 'auctions', t: '🔨 입찰 라운드 관리', d: '새 라운드 시작, 결과 확정.' },
   ];
   return (
     <div>
-      <h1 className="title">오금현대</h1>
-      <p className="subtitle">서울특별시 송파구 오금로 223</p>
+      <h1 className="title">{data?.complex?.name || '오금현대'}</h1>
+      <p className="subtitle">{data?.complex?.address || '—'}</p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
         {stats.map(s => (
@@ -243,17 +250,32 @@ function SpotsPage({ go }) {
 // ─── Residents (roster + approval) ──────────────────────────────
 function ResidentsPage() {
   const [tab, setTab] = React.useState('roster');
-  const pending = [
-    { name: '박지민', dong: '102', ho: '1503', car: '56다 9012', at: '2026-04-19 22:07', reason: '명단에 없는 호수' },
-    { name: '장현진', dong: '103', ho: '0805', car: '77바 1234', at: '2026-04-19 18:22', reason: '명단 실명 불일치' },
-    { name: '친서준', dong: '105', ho: '1102', car: '88사 5678', at: '2026-04-19 14:40', reason: '명단 미등록 동·호' },
-  ];
-  const approved = [
-    { name: '김철수', dong: '101', ho: '1201', car: '12가 3456', at: '2026-04-20', auto: true },
-    { name: '이영희', dong: '103', ho: '0902', car: '34나 5678', at: '2026-04-20', auto: true },
-    { name: '정수민', dong: '101', ho: '0802', car: '78라 3456', at: '2026-04-15', auto: false },
-    { name: '조현우', dong: '104', ho: '2101', car: '90마 7890', at: '2026-04-12', auto: true },
-  ];
+  const [pending, setPending] = React.useState([]);
+  const [approved, setApproved] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const refetch = React.useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      fetch('/api/residents/requests?status=pending', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/residents/requests?status=approved', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+    ]).then(([p, a]) => {
+      setPending(Array.isArray(p) ? p : []);
+      setApproved(Array.isArray(a) ? a : []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  React.useEffect(() => { refetch(); }, [refetch]);
+
+  const decide = async (id, status) => {
+    const res = await fetch(`/api/residents/requests?id=${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) refetch();
+  };
+
+  const fmtDate = (s) => s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
     <div>
@@ -296,17 +318,21 @@ function ResidentsPage() {
                 <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>이유</th><th>요청 시각</th><th style={{ width: 200 }}></th></tr>
               </thead>
               <tbody>
-                {pending.map((p, i) => (
-                  <tr key={i}>
+                {loading ? (
+                  <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 16 }}>불러오는 중…</td></tr>
+                ) : pending.length === 0 ? (
+                  <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 16 }}>대기 중인 요청이 없어요.</td></tr>
+                ) : pending.map((p) => (
+                  <tr key={p.id}>
                     <td style={{ fontWeight: 600 }}>{p.name}</td>
                     <td>{p.dong}동 {p.ho}호</td>
-                    <td>{p.car}</td>
-                    <td><span className="badge badge-warn">{p.reason}</span></td>
-                    <td><span className="muted">{p.at}</span></td>
+                    <td>{p.car_plate || '—'}</td>
+                    <td><span className="badge badge-warn">{p.reason || '명단 불일치'}</span></td>
+                    <td><span className="muted">{fmtDate(p.created_at)}</span></td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                        <button className="btn btn-outline" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>거절</button>
-                        <button className="btn btn-primary" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>승인</button>
+                        <button className="btn btn-outline" onClick={() => decide(p.id, 'rejected')} style={{ height: 28, fontSize: 12, padding: '0 10px' }}>거절</button>
+                        <button className="btn btn-primary" onClick={() => decide(p.id, 'approved')} style={{ height: 28, fontSize: 12, padding: '0 10px' }}>승인</button>
                       </div>
                     </td>
                   </tr>
@@ -324,13 +350,15 @@ function ResidentsPage() {
                 <tr><th>이름</th><th>동/호</th><th>차량 번호</th><th>승인일</th><th>상태</th></tr>
               </thead>
               <tbody>
-                {approved.map((p, i) => (
-                  <tr key={i}>
+                {approved.length === 0 ? (
+                  <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 16 }}>승인된 입주민이 없어요.</td></tr>
+                ) : approved.map((p) => (
+                  <tr key={p.id}>
                     <td style={{ fontWeight: 600 }}>{p.name}</td>
                     <td>{p.dong}동 {p.ho}호</td>
-                    <td>{p.car}</td>
-                    <td><span className="muted">{p.at}</span></td>
-                    <td><span className="badge badge-success">승인됨</span></td>
+                    <td>{p.car_plate || '—'}</td>
+                    <td><span className="muted">{fmtDate(p.decided_at || p.created_at)}</span></td>
+                    <td><span className="badge badge-success">{p.auto ? '자동 승인' : '수동 승인'}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -343,46 +371,18 @@ function ResidentsPage() {
 }
 
 // ─── Auctions page (live + history + new round) ──────────────────
-const PAST_ROUNDS = [
-  {
-    id: '2026-02',
-    name: '2026년 2월 라운드',
-    bidPeriod: '2026-01-15 ~ 2026-01-22',
-    contract: '2026-02-01 ~ 2026-04-30',
-    total: 18,
-    awarded: 15,
-    bids: [
-      { n: 'A-15', winner: '김철수', dong: '101', ho: '1201', amount: 150000, bidders: 4 },
-      { n: 'A-22', winner: '이영희', dong: '103', ho: '0902', amount: 130000, bidders: 2 },
-      { n: 'B-05', winner: '박민수', dong: '105', ho: '0503', amount: 110000, bidders: 3 },
-      { n: 'B-11', winner: '정현우', dong: '102', ho: '1802', amount: 125000, bidders: 2 },
-      { n: 'C-02', winner: '최민석', dong: '102', ho: '0804', amount: 140000, bidders: 5 },
-      { n: 'C-08', winner: '조현우', dong: '104', ho: '2101', amount: 180000, bidders: 6 },
-      { n: 'C-12', winner: '한예슬', dong: '106', ho: '0301', amount: 160000, bidders: 3 },
-      { n: 'D-02', winner: '정수민', dong: '101', ho: '0802', amount: 100000, bidders: 1 },
-    ],
-    empty: ['A-01', 'B-04', 'D-07'],
-  },
-  {
-    id: '2025-11',
-    name: '2025년 11월 라운드',
-    bidPeriod: '2025-10-15 ~ 2025-10-22',
-    contract: '2025-11-01 ~ 2026-01-31',
-    total: 18,
-    awarded: 16,
-    bids: [
-      { n: 'A-10', winner: '김철수', dong: '101', ho: '1201', amount: 140000, bidders: 3 },
-      { n: 'B-03', winner: '한예슬', dong: '106', ho: '0301', amount: 125000, bidders: 2 },
-      { n: 'C-05', winner: '최민석', dong: '102', ho: '0804', amount: 175000, bidders: 4 },
-      { n: 'C-12', winner: '박지민', dong: '105', ho: '1503', amount: 160000, bidders: 3 },
-    ],
-    empty: ['D-01', 'D-08'],
-  },
-];
-
 function AuctionsPage() {
   const [tab, setTab] = React.useState('live');
   const [selectedPast, setSelectedPast] = React.useState(null);
+  const [roundName, setRoundName] = React.useState('2026년 5월 라운드');
+
+  const [liveRound, setLiveRound] = React.useState(null);
+  const [liveDetail, setLiveDetail] = React.useState(null);
+  const [pastRounds, setPastRounds] = React.useState([]);
+  const [pastDetail, setPastDetail] = React.useState(null);
+  const [cells, setCells] = React.useState([]);
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState('');
 
   // New round form state
   const [bidStartDate, setBidStartDate] = React.useState('2026-04-15');
@@ -391,18 +391,109 @@ function AuctionsPage() {
   const [bidEndTime, setBidEndTime] = React.useState('18:00');
   const [contractStart, setContractStart] = React.useState('2026-05-01');
   const [contractEnd, setContractEnd] = React.useState('2026-07-31');
-  const [activeCount, setActiveCount] = React.useState(null);
 
+  const refetchList = React.useCallback(() => {
+    Promise.all([
+      fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/rounds?status=finalized', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/rounds?status=closed', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+    ]).then(([live, finalized, closed, cs]) => {
+      setLiveRound(Array.isArray(live) && live.length ? live[0] : null);
+      const past = [...(finalized || []), ...(closed || [])].sort((a, b) =>
+        (b.bid_end || '').localeCompare(a.bid_end || ''));
+      setPastRounds(past);
+      setCells(Array.isArray(cs) ? cs : (cs.cells || []));
+    });
+  }, []);
+
+  React.useEffect(() => { refetchList(); }, [refetchList]);
+
+  // Live round detail polling
   React.useEffect(() => {
-    if (tab !== 'new') return;
-    fetch('/api/cells').then(r => r.json()).then(d => {
-      const cells = Array.isArray(d) ? d : (d.cells || []);
-      const n = cells.filter(c => c.active !== false && c.type !== 'excluded').length;
-      setActiveCount(n);
-    }).catch(() => setActiveCount(0));
-  }, [tab]);
+    if (!liveRound) { setLiveDetail(null); return; }
+    const load = () => fetch(`/api/rounds/${liveRound.id}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).then(setLiveDetail).catch(() => {});
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [liveRound]);
 
-  const fmt = (n) => n.toLocaleString() + '원';
+  // Past round detail
+  React.useEffect(() => {
+    if (!selectedPast) { setPastDetail(null); return; }
+    fetch(`/api/rounds/${selectedPast.id}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).then(setPastDetail);
+  }, [selectedPast]);
+
+  const fmt = (n) => (n || 0).toLocaleString() + '원';
+
+  const bidTargetCells = cells.filter(c => c.active !== false && c.type !== 'excluded');
+  const activeCount = bidTargetCells.length;
+
+  const createRound = async () => {
+    setErr('');
+    if (!roundName.trim()) { setErr('라운드 이름을 입력해주세요'); return; }
+    setSaving(true);
+    const bid_start = new Date(`${bidStartDate}T${bidStartTime}:00`).toISOString();
+    const bid_end = new Date(`${bidEndDate}T${bidEndTime}:00`).toISOString();
+    const res = await fetch('/api/rounds', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: roundName.trim(),
+        bid_start, bid_end,
+        contract_start: contractStart,
+        contract_end: contractEnd,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) { setErr((await res.json()).error || '생성 실패'); return; }
+    refetchList();
+    setTab('live');
+  };
+
+  const changeStatus = async (id, status) => {
+    if (!confirm(status === 'closed' ? '라운드를 마감할까요?' : '낙찰을 확정할까요? (되돌릴 수 없음)')) return;
+    const res = await fetch(`/api/rounds/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) refetchList();
+  };
+
+  // Build live rows: all bid-target cells (empty or with top bid) from liveDetail.per_cell
+  const liveRows = React.useMemo(() => {
+    if (!liveDetail) return [];
+    const perCell = liveDetail.per_cell || {};
+    return bidTargetCells.map(c => {
+      const entry = perCell[c.id];
+      return {
+        cell_id: c.id,
+        n: c.n,
+        top: entry ? entry.top.amount : null,
+        bidders: entry ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 0,
+        last: entry ? entry.top.created_at : null,
+        winner: entry ? entry.top : null,
+        count: entry ? entry.count : 0,
+      };
+    }).sort((a, b) => (b.top || 0) - (a.top || 0) || a.n.localeCompare(b.n));
+  }, [liveDetail, bidTargetCells]);
+
+  const now = Date.now();
+  const relTime = (iso) => {
+    if (!iso) return '—';
+    const diff = (now - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return '방금 전';
+    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+    return `${Math.floor(diff / 86400)}일 전`;
+  };
+  const daysLeft = (end) => {
+    if (!end) return '—';
+    const d = Math.ceil((new Date(end).getTime() - now) / (1000 * 60 * 60 * 24));
+    return d <= 0 ? '마감' : `D-${d}`;
+  };
+  const fmtDate = (iso) => iso ? iso.slice(0, 10) : '';
 
   return (
     <div>
@@ -421,28 +512,38 @@ function AuctionsPage() {
         </button>
       </div>
 
-      {tab === 'live' && (
+      {tab === 'live' && !liveRound && (
+        <div className="card" style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>진행 중인 라운드가 없어요</div>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 16 }}>새 라운드를 시작해보세요.</div>
+          <button className="btn btn-primary" onClick={() => setTab('new')}>+ 새 라운드</button>
+        </div>
+      )}
+
+      {tab === 'live' && liveRound && (
         <>
           <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--primary)' }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>2026년 5월 라운드</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{liveRound.name}</div>
                   <span className="badge badge-success">진행 중</span>
                 </div>
-                <div className="muted" style={{ marginTop: 4 }}>입찰 2026-04-15 09:00 ~ 2026-04-22 18:00 · 계약 2026-05-01 ~ 2026-07-31</div>
+                <div className="muted" style={{ marginTop: 4 }}>
+                  입찰 {fmtDate(liveRound.bid_start)} ~ {fmtDate(liveRound.bid_end)} · 계약 {liveRound.contract_start} ~ {liveRound.contract_end}
+                </div>
               </div>
               <div className="row">
-                <button className="btn btn-outline">마감</button>
-                <button className="btn btn-primary">확정 실행</button>
+                <button className="btn btn-outline" onClick={() => changeStatus(liveRound.id, 'closed')}>마감</button>
+                <button className="btn btn-primary" onClick={() => changeStatus(liveRound.id, 'finalized')}>확정 실행</button>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
               {[
-                { l: '대상 구역', v: '18칸' },
-                { l: '참여자', v: '48명' },
-                { l: '총 입찰', v: '73건' },
-                { l: '남은 시간', v: 'D-3' },
+                { l: '대상 구역', v: `${activeCount}칸` },
+                { l: '참여자', v: `${liveDetail ? new Set((liveDetail.bids || []).map(b => `${b.dong}-${b.ho}`)).size : 0}명` },
+                { l: '총 입찰', v: `${liveDetail ? (liveDetail.bids || []).length : 0}건` },
+                { l: '남은 시간', v: daysLeft(liveRound.bid_end) },
               ].map((s, i) => (
                 <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
                   <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
@@ -455,40 +556,30 @@ function AuctionsPage() {
           <div className="card" style={{ padding: 0 }}>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ fontSize: 14, fontWeight: 700 }}>실시간 입찰 현황</div>
-              <span className="badge badge-success">2026년 5월 라운드</span>
+              <span className="badge badge-success">{liveRound.name}</span>
               <div className="grow" />
-              <input className="input" placeholder="🔍 구역 번호" style={{ width: 180, height: 32, fontSize: 12 }} />
+              <span className="muted" style={{ fontSize: 11 }}>5초마다 새로고침</span>
             </div>
             <table className="table">
               <thead>
                 <tr>
-                  <th>구역</th><th>현재 최고가</th><th>참여자</th><th>최종 입찰</th><th>최고가 입주민</th><th style={{ width: 80 }}></th>
+                  <th>구역</th><th>현재 최고가</th><th>참여자</th><th>최종 입찰</th><th>최고가 입주민</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { n: 'C-03', top: 200000, bidders: 5, last: '3분 전', who: '박지민 · 105동 1503호', hot: true },
-                  { n: 'A-23', top: 180000, bidders: 3, last: '12분 전', who: '김철수 · 101동 1201호', hot: true },
-                  { n: 'B-09', top: 140000, bidders: 2, last: '28분 전', who: '최민석 · 102동 0804호' },
-                  { n: 'B-07', top: 120000, bidders: 1, last: '2시간 전', who: '이영희 · 103동 0902호' },
-                  { n: 'A-21', top: 100000, bidders: 1, last: '4시간 전', who: '정수민 · 101동 0802호' },
-                  { n: 'D-01', top: null, bidders: 0, last: '—', who: '—', empty: true },
-                  { n: 'D-02', top: null, bidders: 0, last: '—', who: '—', empty: true },
-                  { n: 'C-11', top: null, bidders: 0, last: '—', who: '—', empty: true },
-                ].map(r => (
-                  <tr key={r.n} style={{ opacity: r.empty ? 0.55 : 1 }}>
+                {liveRows.length === 0 ? (
+                  <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 16 }}>대상 구역이 없어요. 구역 설정에서 활성화하세요.</td></tr>
+                ) : liveRows.map(r => (
+                  <tr key={r.cell_id} style={{ opacity: r.top ? 1 : 0.55 }}>
                     <td style={{ fontWeight: 700 }}>
-                      {r.n} {r.hot && <span className="badge badge-warn" style={{ marginLeft: 6 }}>🔥 경쟁</span>}
+                      {r.n} {r.bidders >= 3 && <span className="badge badge-warn" style={{ marginLeft: 6 }}>🔥 경쟁</span>}
                     </td>
                     <td style={{ fontWeight: 700, color: r.top ? 'var(--primary)' : 'var(--n400)' }}>
                       {r.top ? r.top.toLocaleString() + '원' : '입찰 없음'}
                     </td>
                     <td>{r.bidders > 0 ? `${r.bidders}명` : <span className="muted">—</span>}</td>
-                    <td className="muted" style={{ fontSize: 12 }}>{r.last}</td>
-                    <td style={{ fontSize: 13 }}>{r.empty ? <span className="muted">—</span> : r.who}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>내역</button>
-                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>{relTime(r.last)}</td>
+                    <td style={{ fontSize: 13 }}>{r.winner ? `${r.winner.name} · ${r.winner.dong}동 ${r.winner.ho}호` : <span className="muted">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -507,15 +598,17 @@ function AuctionsPage() {
           </div>
           <table className="table">
             <thead>
-              <tr><th>이름</th><th>입찰 기간</th><th>계약 기간</th><th>확정</th><th></th></tr>
+              <tr><th>이름</th><th>입찰 기간</th><th>계약 기간</th><th>상태</th><th></th></tr>
             </thead>
             <tbody>
-              {PAST_ROUNDS.map(r => (
+              {pastRounds.length === 0 ? (
+                <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 16 }}>지난 라운드가 없어요.</td></tr>
+              ) : pastRounds.map(r => (
                 <tr key={r.id} onClick={() => setSelectedPast(r)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td className="muted">{r.bidPeriod}</td>
-                  <td className="muted">{r.contract}</td>
-                  <td>{r.awarded} / {r.total}</td>
+                  <td className="muted">{fmtDate(r.bid_start)} ~ {fmtDate(r.bid_end)}</td>
+                  <td className="muted">{r.contract_start} ~ {r.contract_end}</td>
+                  <td><span className={`badge ${r.status === 'finalized' ? 'badge-success' : 'badge-neutral'}`}>{r.status === 'finalized' ? '확정' : '마감'}</span></td>
                   <td style={{ textAlign: 'right', color: 'var(--primary)', fontSize: 12, fontWeight: 600 }}>상세 →</td>
                 </tr>
               ))}
@@ -524,66 +617,69 @@ function AuctionsPage() {
         </div>
       )}
 
-      {tab === 'past' && selectedPast && (
-        <>
-          <div className="row" style={{ marginBottom: 12 }}>
-            <button className="btn btn-ghost" onClick={() => setSelectedPast(null)}>← 목록으로</button>
-          </div>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedPast.name}</div>
-            <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-              입찰 {selectedPast.bidPeriod} · 계약 {selectedPast.contract}
+      {tab === 'past' && selectedPast && (() => {
+        const perCell = pastDetail ? pastDetail.per_cell || {} : {};
+        const cellRows = bidTargetCells.map(c => ({ cell: c, entry: perCell[c.id] }));
+        const awarded = cellRows.filter(r => r.entry).length;
+        const total = cellRows.length;
+        const bidsArr = pastDetail ? (pastDetail.bids || []) : [];
+        const avg = awarded > 0
+          ? Math.round(cellRows.filter(r => r.entry).reduce((a, r) => a + r.entry.top.amount, 0) / awarded)
+          : 0;
+        return (
+          <>
+            <div className="row" style={{ marginBottom: 12 }}>
+              <button className="btn btn-ghost" onClick={() => setSelectedPast(null)}>← 목록으로</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
-              {[
-                { l: '대상 구역', v: `${selectedPast.total}칸` },
-                { l: '낙찰', v: `${selectedPast.awarded}칸` },
-                { l: '미낙찰', v: `${selectedPast.total - selectedPast.awarded}칸` },
-                { l: '평균 낙찰가', v: fmt(Math.round(selectedPast.bids.reduce((a,b) => a + b.amount, 0) / selectedPast.bids.length)) },
-              ].map((s, i) => (
-                <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
-                  <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{s.v}</div>
-                </div>
-              ))}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedPast.name}</div>
+              <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+                입찰 {fmtDate(selectedPast.bid_start)} ~ {fmtDate(selectedPast.bid_end)} · 계약 {selectedPast.contract_start} ~ {selectedPast.contract_end}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
+                {[
+                  { l: '대상 구역', v: `${total}칸` },
+                  { l: '낙찰', v: `${awarded}칸` },
+                  { l: '미낙찰', v: `${total - awarded}칸` },
+                  { l: '평균 낙찰가', v: awarded > 0 ? fmt(avg) : '—' },
+                ].map((s, i) => (
+                  <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
+                    <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{s.v}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="card" style={{ padding: 0 }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>낙찰 상세</div>
-            <table className="table">
-              <thead>
-                <tr><th>구역</th><th>낙찰자</th><th>동/호</th><th>낙찰가</th><th>경쟁</th></tr>
-              </thead>
-              <tbody>
-                {selectedPast.bids.map(b => (
-                  <tr key={b.n}>
-                    <td style={{ fontWeight: 700 }}>{b.n}</td>
-                    <td>{b.winner}</td>
-                    <td className="muted">{b.dong}동 {b.ho}호</td>
-                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{fmt(b.amount)}</td>
-                    <td className="muted">{b.bidders}명</td>
-                  </tr>
-                ))}
-                {selectedPast.empty.map(n => (
-                  <tr key={n} style={{ opacity: 0.55 }}>
-                    <td style={{ fontWeight: 700 }}>{n}</td>
-                    <td className="muted">—</td>
-                    <td className="muted">—</td>
-                    <td className="muted">미낙찰</td>
-                    <td className="muted">0명</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+            <div className="card" style={{ padding: 0 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>낙찰 상세</div>
+              <table className="table">
+                <thead>
+                  <tr><th>구역</th><th>낙찰자</th><th>동/호</th><th>낙찰가</th><th>경쟁</th></tr>
+                </thead>
+                <tbody>
+                  {!pastDetail ? (
+                    <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 16 }}>불러오는 중…</td></tr>
+                  ) : cellRows.map(({ cell, entry }) => (
+                    <tr key={cell.id} style={{ opacity: entry ? 1 : 0.55 }}>
+                      <td style={{ fontWeight: 700 }}>{cell.n}</td>
+                      <td>{entry ? entry.top.name : <span className="muted">—</span>}</td>
+                      <td className="muted">{entry ? `${entry.top.dong}동 ${entry.top.ho}호` : '—'}</td>
+                      <td style={{ fontWeight: 600, color: entry ? 'var(--primary)' : 'var(--n400)' }}>{entry ? fmt(entry.top.amount) : '미낙찰'}</td>
+                      <td className="muted">{entry ? `${new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size}명` : '0명'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        );
+      })()}
 
       {tab === 'new' && (
         <div className="card">
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>새 라운드 생성</div>
           <div className="stack">
-            <div><label className="label">라운드 이름</label><input className="input" defaultValue="2026년 5월 라운드" /></div>
+            <div><label className="label">라운드 이름</label><input className="input" value={roundName} onChange={e => setRoundName(e.target.value)} /></div>
             <div>
               <label className="label">입찰 기간</label>
               <div className="row">
@@ -620,7 +716,7 @@ function AuctionsPage() {
               <label className="label">대상 구역</label>
               <div style={{ padding: '10px 12px', background: 'var(--n50)', borderRadius: 8, fontSize: 13 }}>
                 <b>활성화된 주차 구역 전체</b>
-                {activeCount !== null && <span className="muted"> · {activeCount}칸</span>}
+                <span className="muted"> · {activeCount}칸</span>
                 <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                   비활성화된 구역과 전기차·장애인·방문객 구역은 자동 제외됩니다.
                 </div>
@@ -630,9 +726,10 @@ function AuctionsPage() {
               💡 시작 시각이 되면 입주민 앱에 자동으로 알림이 발송됩니다.<br/>
               ⚖️ 최고가보다 <b style={{ color: 'var(--n900)' }}>높은 금액</b>만 입찰 가능 — 동점은 발생하지 않습니다.
             </div>
+            {err && <div style={{ color: 'var(--danger)', fontSize: 12 }}>{err}</div>}
             <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setTab('live')}>취소</button>
-              <button className="btn btn-primary" onClick={() => setTab('live')}>생성하기</button>
+              <button className="btn btn-ghost" onClick={() => setTab('live')} disabled={saving}>취소</button>
+              <button className="btn btn-primary" onClick={createRound} disabled={saving}>{saving ? '생성 중…' : '생성하기'}</button>
             </div>
           </div>
         </div>
@@ -643,6 +740,39 @@ function AuctionsPage() {
 
 // ─── Complex settings ───────────────────────────────────────────
 function ComplexPage() {
+  const [cfg, setCfg] = React.useState({ name: '', address: '', total_units: '', min_bid: 50000 });
+  const [saving, setSaving] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+
+  React.useEffect(() => {
+    fetch('/api/complex?complex=heliocity', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : {})
+      .then(d => setCfg(c => ({
+        ...c,
+        name: d.name || '',
+        address: d.address || '',
+        total_units: d.total_units || '',
+        min_bid: d.min_bid || 50000,
+      })));
+  }, []);
+
+  const save = async () => {
+    setSaving(true); setMsg('');
+    const res = await fetch('/api/complex', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        complex: 'heliocity',
+        name: cfg.name,
+        address: cfg.address,
+        total_units: cfg.total_units ? Number(cfg.total_units) : null,
+        min_bid: Number(cfg.min_bid) || 0,
+      }),
+    });
+    setSaving(false);
+    setMsg(res.ok ? '저장되었습니다' : '저장 실패');
+    setTimeout(() => setMsg(''), 2500);
+  };
+
   return (
     <div>
       <h1 className="title">단지 설정</h1>
@@ -651,9 +781,9 @@ function ComplexPage() {
         <div className="card">
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>기본 정보</div>
           <div className="stack">
-            <div><label className="label">단지명</label><input className="input" defaultValue="오금현대" /></div>
-            <div><label className="label">주소</label><input className="input" defaultValue="서울특별시 송파구 오금로 223" /></div>
-            <div><label className="label">총 세대</label><input className="input" defaultValue="1,124세대" /></div>
+            <div><label className="label">단지명</label><input className="input" value={cfg.name} onChange={e => setCfg(c => ({ ...c, name: e.target.value }))} /></div>
+            <div><label className="label">주소</label><input className="input" value={cfg.address} onChange={e => setCfg(c => ({ ...c, address: e.target.value }))} /></div>
+            <div><label className="label">총 세대</label><input className="input" type="number" value={cfg.total_units} onChange={e => setCfg(c => ({ ...c, total_units: e.target.value }))} /></div>
             <div style={{ background: 'var(--primary-light)', padding: 12, borderRadius: 8 }}>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>🏢 K-apt 공공데이터 연동됨</div>
@@ -684,7 +814,7 @@ function ComplexPage() {
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>입찰 규칙</div>
           <div className="stack">
             <div className="row">
-              <div className="grow"><label className="label">최소 입찰가</label><input className="input" defaultValue="50,000원" /></div>
+              <div className="grow"><label className="label">최소 입찰가</label><input className="input" type="number" value={cfg.min_bid} onChange={e => setCfg(c => ({ ...c, min_bid: e.target.value }))} /></div>
               <div className="grow"><label className="label">입찰 규칙</label>
                 <input className="input" value="최고가 초과만 가능 (동점 방지)" readOnly style={{ background: 'var(--n50)' }} />
               </div>
@@ -701,9 +831,9 @@ function ComplexPage() {
           </div>
         </div>
       </div>
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
-        <button className="btn btn-ghost">취소</button>
-        <button className="btn btn-primary">저장</button>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16, alignItems: 'center', gap: 12 }}>
+        {msg && <span className="muted" style={{ fontSize: 12 }}>{msg}</span>}
+        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '저장 중…' : '저장'}</button>
       </div>
     </div>
   );

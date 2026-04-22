@@ -5,15 +5,33 @@ function JPNaverMap({ go }) {
   const mapRef = React.useRef(null);
   const markersRef = React.useRef([]);
   const [cells, setCells] = React.useState([]);
+  const [perCell, setPerCell] = React.useState({});
   const [mapReady, setMapReady] = React.useState(false);
   const [picked, setPicked] = React.useState(null);
 
   const CENTER = { lat: 37.5058, lng: 127.1254 };
 
+  const myKey = React.useMemo(() => {
+    try {
+      const d = localStorage.getItem('jp_dong') || '';
+      const h = localStorage.getItem('jp_ho') || '';
+      return d && h ? `${d}-${h}` : '';
+    } catch { return ''; }
+  }, []);
+
   const refetch = React.useCallback(() => {
     fetch('/api/cells', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setCells(data.filter(c => c.active !== false)); })
+      .catch(() => {});
+    fetch('/api/rounds?status=live', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(async rounds => {
+        const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
+        if (!live) { setPerCell({}); return; }
+        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        setPerCell(detail?.per_cell || {});
+      })
       .catch(() => {});
   }, []);
 
@@ -30,6 +48,20 @@ function JPNaverMap({ go }) {
     };
   }, [refetch]);
 
+  const cellState = React.useCallback((cell) => {
+    const entry = perCell[cell.id];
+    if (!entry || !entry.all || entry.all.length === 0) return 'open';
+    const topKey = entry.top ? `${entry.top.dong}-${entry.top.ho}` : '';
+    if (myKey && topKey === myKey) return 'leading';
+    return 'bidding';
+  }, [perCell, myKey]);
+
+  const MARKER_STYLES = {
+    open:    { bg: '#FFFFFF', fg: '#374151', border: '#D1D5DB' },
+    bidding: { bg: '#FEF3C7', fg: '#92400E', border: '#F59E0B' },
+    leading: { bg: '#DBEAFE', fg: '#1E3A8A', border: '#3B82F6' },
+  };
+
   React.useEffect(() => {
     const init = () => {
       if (!window.naver || !window.naver.maps || !divRef.current || mapRef.current) {
@@ -44,8 +76,7 @@ function JPNaverMap({ go }) {
         maxZoom: 21,
         mapTypeControl: false,
         mapDataControl: false,
-        zoomControl: true,
-        zoomControlOptions: { position: naver.maps.Position.RIGHT_BOTTOM, style: naver.maps.ZoomControlStyle.SMALL },
+        zoomControl: false,
         scaleControl: false,
         logoControl: true,
       });
@@ -75,13 +106,15 @@ function JPNaverMap({ go }) {
 
     cells.forEach(cell => {
       const rot = cell.rot || 0;
+      const st = cellState(cell);
+      const s = MARKER_STYLES[st];
       const marker = new naver.maps.Marker({
         position: new naver.maps.LatLng(cell.lat, cell.lng),
         map,
         icon: {
           content: `<div style="
             transform:rotate(${rot}deg);transform-origin:center center;
-            background:#DBEAFE;color:#1E3A8A;border:1.5px solid #3B82F6;
+            background:${s.bg};color:${s.fg};border:1.5px solid ${s.border};
             border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;
             font-family:'Pretendard',system-ui,sans-serif;white-space:nowrap;
             box-shadow:0 1px 2px rgba(0,0,0,0.12);user-select:none;">${cell.n}</div>`,
@@ -99,7 +132,7 @@ function JPNaverMap({ go }) {
       cells.forEach(c => bounds.extend(new naver.maps.LatLng(c.lat, c.lng)));
       map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
     }
-  }, [cells, mapReady]);
+  }, [cells, mapReady, perCell, myKey]);
 
   return (
     <div style={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', background: C.n100 }}>
@@ -154,22 +187,30 @@ function JPNaverMap({ go }) {
               </div>
               <JPDdayBadge days={3} />
             </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-              <div style={{ flex: 1, background: C.n50 || '#F9FAFB', borderRadius: 10, padding: 10 }}>
-                <div style={{ fontSize: 11, color: C.n500 }}>현재 최고가</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.n900, marginTop: 2 }}>160,000<span style={{ fontSize: 11, fontWeight: 500, color: C.n500 }}>원</span></div>
-              </div>
-              <div style={{ flex: 1, background: C.n50 || '#F9FAFB', borderRadius: 10, padding: 10 }}>
-                <div style={{ fontSize: 11, color: C.n500 }}>입찰자</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: C.n900, marginTop: 2 }}>3<span style={{ fontSize: 11, fontWeight: 500, color: C.n500 }}>명</span></div>
-              </div>
-            </div>
+            {(() => {
+              const entry = perCell[picked.id];
+              const top = entry?.top?.amount || 0;
+              const count = entry?.all ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 0;
+              return (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                  <div style={{ flex: 1, background: C.n50 || '#F9FAFB', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: C.n500 }}>현재 최고가</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.n900, marginTop: 2 }}>
+                      {top ? <>{top.toLocaleString()}<span style={{ fontSize: 11, fontWeight: 500, color: C.n500 }}>원</span></> : <span style={{ fontSize: 13, color: C.n500 }}>입찰 없음</span>}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, background: C.n50 || '#F9FAFB', borderRadius: 10, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: C.n500 }}>입찰자</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.n900, marginTop: 2 }}>{count}<span style={{ fontSize: 11, fontWeight: 500, color: C.n500 }}>명</span></div>
+                  </div>
+                </div>
+              );
+            })()}
             <button onClick={() => { const code = `${picked.row}-${picked.n}`; setPicked(null); go && go('detail', { spot: code }); }} style={{
               width: '100%', padding: '12px 0', border: 0, borderRadius: 10,
               background: C.primary, color: C.white, fontSize: 14, fontWeight: 700,
               cursor: 'pointer', fontFamily: jpFont,
             }}>입찰하기</button>
-            <div style={{ textAlign: 'center', fontSize: 10, color: C.n400, marginTop: 8 }}>※ 금액·입찰자 수는 예시입니다</div>
           </div>
         </>
       )}
@@ -267,10 +308,9 @@ function SpotListScreen({ go, state }) {
         padding: '10px 16px', background: C.white, borderTop: `1px solid ${C.n100}`,
       }}>
         {[
-          { c: C.white, b: C.n200, l: '신청 가능' },
-          { c: C.successLight, b: C.success, l: '내가 신청' },
-          { c: C.primaryLight, b: C.primary, l: '내가 1위' },
-          { c: C.n100, b: C.n200, l: '마감' },
+          { c: '#FFFFFF', b: '#D1D5DB', l: '입찰 없음' },
+          { c: '#FEF3C7', b: '#F59E0B', l: '입찰 진행중' },
+          { c: '#DBEAFE', b: '#3B82F6', l: '내가 1위' },
         ].map((i, idx) => (
           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 12, height: 12, borderRadius: 3, background: i.c, border: `1.5px solid ${i.b}` }} />
@@ -284,10 +324,58 @@ function SpotListScreen({ go, state }) {
 
 // ─── Bid ────────────────────────────────────────────────────────
 function BidScreen({ go, state }) {
-  const [amount, setAmount] = React.useState(160000);
-  const topBid = 150000;
-  const isTooLow = amount > 0 && amount <= topBid;
   const spot = state.currentSpot || 'A-23';
+  const [amount, setAmount] = React.useState(0);
+  const [round, setRound] = React.useState(null);
+  const [cell, setCell] = React.useState(null);
+  const [topBid, setTopBid] = React.useState(0);
+  const [participants, setParticipants] = React.useState(0);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  React.useEffect(() => {
+    (async () => {
+      const [rounds, cells] = await Promise.all([
+        fetch('/api/rounds?status=live').then(r => r.ok ? r.json() : []),
+        fetch('/api/cells').then(r => r.ok ? r.json() : []),
+      ]);
+      const liveRound = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
+      setRound(liveRound);
+      const cs = Array.isArray(cells) ? cells : (cells.cells || []);
+      const matched = cs.find(c => `${c.row}-${c.n}` === spot || c.n === spot);
+      setCell(matched || null);
+      if (liveRound && matched) {
+        const detail = await fetch(`/api/rounds/${liveRound.id}`).then(r => r.ok ? r.json() : null);
+        const entry = detail?.per_cell?.[matched.id];
+        const t = entry ? entry.top.amount : 0;
+        setTopBid(t);
+        setParticipants(entry ? new Set(entry.all.map(b => `${b.dong}-${b.ho}`)).size : 0);
+        setAmount(t ? t + 10000 : 50000);
+      } else {
+        setAmount(50000);
+      }
+    })();
+  }, [spot]);
+
+  const isTooLow = amount > 0 && amount <= topBid;
+
+  const submit = async () => {
+    setErr('');
+    if (!round || !cell) { setErr('진행 중인 라운드가 없어요'); return; }
+    setSubmitting(true);
+    const name = (() => { try { return localStorage.getItem('jp_name') || ''; } catch { return ''; } })();
+    const dong = (() => { try { return localStorage.getItem('jp_dong') || ''; } catch { return ''; } })();
+    const ho = (() => { try { return localStorage.getItem('jp_ho') || ''; } catch { return ''; } })();
+    if (!name || !dong || !ho) { setErr('로그인 정보가 없어요. 처음부터 다시 시작해주세요.'); setSubmitting(false); return; }
+    const res = await fetch('/api/bids', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ round_id: round.id, cell_id: cell.id, dong, ho, name, amount }),
+    });
+    setSubmitting(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setErr(d.error || '입찰 실패'); return; }
+    go('complete', { spot, amount });
+  };
 
   return (
     <JPScreen bg={C.white}>
@@ -300,11 +388,11 @@ function BidScreen({ go, state }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1, background: C.n100, borderRadius: 12, padding: 12 }}>
             <div style={{ fontSize: 12, color: C.n500 }}>현재 최고가</div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{topBid.toLocaleString()}원</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{topBid ? topBid.toLocaleString() + '원' : '—'}</div>
           </div>
           <div style={{ flex: 1, background: C.n100, borderRadius: 12, padding: 12 }}>
             <div style={{ fontSize: 12, color: C.n500 }}>참여자</div>
-            <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>3명</div>
+            <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>{participants}명</div>
           </div>
         </div>
 
@@ -312,8 +400,7 @@ function BidScreen({ go, state }) {
           background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10,
           padding: '10px 12px', fontSize: 12, color: '#1E40AF', lineHeight: 1.5,
         }}>
-          ℹ️ 최고가보다 <b>높은 금액</b>만 입찰할 수 있어요 (동점 방지).<br/>
-          세대당 권리증은 1개 — 새로 입찰하면 기존 입찰은 자동 취소돼요.
+          ℹ️ 최고가보다 <b>높은 금액</b>만 입찰할 수 있어요 (동점 방지).
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -331,6 +418,7 @@ function BidScreen({ go, state }) {
             <div style={{ fontSize: 20, fontWeight: 600, color: C.n500, marginBottom: 4 }}>원</div>
           </div>
           {isTooLow && <div style={{ fontSize: 12, color: C.danger }}>현재 최고가보다 높은 금액을 입력해주세요</div>}
+          {err && <div style={{ fontSize: 12, color: C.danger }}>{err}</div>}
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -344,9 +432,9 @@ function BidScreen({ go, state }) {
       </div>
 
       <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
-        <JPPrimaryButton label="신청 확인"
-          disabled={isTooLow || amount === 0}
-          onClick={() => go('complete', { spot, amount })} />
+        <JPPrimaryButton label={submitting ? '입찰 중…' : '신청 확인'}
+          disabled={isTooLow || amount === 0 || submitting}
+          onClick={submit} />
       </div>
     </JPScreen>
   );

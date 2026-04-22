@@ -43,7 +43,12 @@ function HomeScreen({ go, state }) {
             <div style={{ fontSize: 24, fontWeight: 700, marginTop: 2 }}>오금현대</div>
           </div>
         }
-        right={null}
+        right={
+          <button onClick={() => go('settings')} style={{
+            background: 'transparent', border: 0, fontSize: 22, padding: 6,
+            cursor: 'pointer', color: C.n700,
+          }}>⚙️</button>
+        }
       />
       <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 100 }}>
         {/* Auction banner */}
