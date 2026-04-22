@@ -102,8 +102,11 @@ function LayoutEditorPage() {
   // Create a Naver marker HTML element matching a spot's type
   const buildMarkerIcon = (cell, isSel) => {
     const meta = TYPES[cell.type] || TYPES.general;
-    const bg = isSel ? meta.border : meta.fill;
-    const fg = isSel ? '#fff' : meta.text;
+    const inactive = cell.active === false;
+    const bg = inactive ? '#F3F4F6' : (isSel ? meta.border : meta.fill);
+    const fg = inactive ? '#9CA3AF' : (isSel ? '#fff' : meta.text);
+    const borderColor = inactive ? '#D1D5DB' : meta.border;
+    const borderStyle = inactive ? 'dashed' : 'solid';
     const rot = cell.rot || 0;
     return {
       content: `
@@ -112,7 +115,7 @@ function LayoutEditorPage() {
           transform-origin:center center;
           background:${bg};
           color:${fg};
-          border:1.5px solid ${meta.border};
+          border:1.5px ${borderStyle} ${borderColor};
           border-radius:6px;
           padding:3px 8px;
           font-size:11px;
@@ -122,6 +125,8 @@ function LayoutEditorPage() {
           box-shadow:${isSel ? '0 2px 8px rgba(0,0,0,0.28)' : '0 1px 2px rgba(0,0,0,0.12)'};
           cursor:grab;
           user-select:none;
+          opacity:${inactive ? 0.7 : 1};
+          text-decoration:${inactive ? 'line-through' : 'none'};
         ">${cell.n}</div>
       `,
       anchor: new window.naver.maps.Point(18, 12),

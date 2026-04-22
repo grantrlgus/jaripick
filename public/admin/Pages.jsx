@@ -7,7 +7,6 @@ function Sidebar({ active, go }) {
     { k: 'spots',      label: '🅿️  구역 목록' },
     { k: 'residents',  label: '👥  입주민' },
     { k: 'auctions',   label: '🔨  입찰 라운드' },
-    { k: 'roundwiz',   label: '🪄  라운드 마법사' },
     { k: 'payments',   label: '💳  정산 관리' },
     { k: 'announce',   label: '📢  공지 발송' },
     { k: 'complaints', label: '💬  민원 / 문의' },
@@ -343,110 +342,301 @@ function ResidentsPage() {
   );
 }
 
-// ─── Auctions page ──────────────────────────────────────────────
+// ─── Auctions page (live + history + new round) ──────────────────
+const PAST_ROUNDS = [
+  {
+    id: '2026-02',
+    name: '2026년 2월 라운드',
+    bidPeriod: '2026-01-15 ~ 2026-01-22',
+    contract: '2026-02-01 ~ 2026-04-30',
+    total: 18,
+    awarded: 15,
+    bids: [
+      { n: 'A-15', winner: '김철수', dong: '101', ho: '1201', amount: 150000, bidders: 4 },
+      { n: 'A-22', winner: '이영희', dong: '103', ho: '0902', amount: 130000, bidders: 2 },
+      { n: 'B-05', winner: '박민수', dong: '105', ho: '0503', amount: 110000, bidders: 3 },
+      { n: 'B-11', winner: '정현우', dong: '102', ho: '1802', amount: 125000, bidders: 2 },
+      { n: 'C-02', winner: '최민석', dong: '102', ho: '0804', amount: 140000, bidders: 5 },
+      { n: 'C-08', winner: '조현우', dong: '104', ho: '2101', amount: 180000, bidders: 6 },
+      { n: 'C-12', winner: '한예슬', dong: '106', ho: '0301', amount: 160000, bidders: 3 },
+      { n: 'D-02', winner: '정수민', dong: '101', ho: '0802', amount: 100000, bidders: 1 },
+    ],
+    empty: ['A-01', 'B-04', 'D-07'],
+  },
+  {
+    id: '2025-11',
+    name: '2025년 11월 라운드',
+    bidPeriod: '2025-10-15 ~ 2025-10-22',
+    contract: '2025-11-01 ~ 2026-01-31',
+    total: 18,
+    awarded: 16,
+    bids: [
+      { n: 'A-10', winner: '김철수', dong: '101', ho: '1201', amount: 140000, bidders: 3 },
+      { n: 'B-03', winner: '한예슬', dong: '106', ho: '0301', amount: 125000, bidders: 2 },
+      { n: 'C-05', winner: '최민석', dong: '102', ho: '0804', amount: 175000, bidders: 4 },
+      { n: 'C-12', winner: '박지민', dong: '105', ho: '1503', amount: 160000, bidders: 3 },
+    ],
+    empty: ['D-01', 'D-08'],
+  },
+];
+
 function AuctionsPage() {
+  const [tab, setTab] = React.useState('live');
+  const [selectedPast, setSelectedPast] = React.useState(null);
+
+  // New round form state
+  const [bidStartDate, setBidStartDate] = React.useState('2026-04-15');
+  const [bidStartTime, setBidStartTime] = React.useState('09:00');
+  const [bidEndDate, setBidEndDate] = React.useState('2026-04-22');
+  const [bidEndTime, setBidEndTime] = React.useState('18:00');
+  const [contractStart, setContractStart] = React.useState('2026-05-01');
+  const [contractEnd, setContractEnd] = React.useState('2026-07-31');
+  const [activeCount, setActiveCount] = React.useState(null);
+
+  React.useEffect(() => {
+    if (tab !== 'new') return;
+    fetch('/api/cells').then(r => r.json()).then(d => {
+      const cells = Array.isArray(d) ? d : (d.cells || []);
+      const n = cells.filter(c => c.active !== false && c.type !== 'excluded').length;
+      setActiveCount(n);
+    }).catch(() => setActiveCount(0));
+  }, [tab]);
+
+  const fmt = (n) => n.toLocaleString() + '원';
+
   return (
     <div>
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <h1 className="title" style={{ marginBottom: 2 }}>입찰 라운드</h1>
-          <p className="subtitle" style={{ marginBottom: 0 }}>현재 진행 중인 라운드를 관리합니다.</p>
-        </div>
-        <button className="btn btn-primary">+ 새 라운드 시작</button>
+      <h1 className="title">입찰 라운드</h1>
+      <p className="subtitle">진행 중인 라운드 · 과거 이력 · 새 라운드 생성</p>
+
+      <div className="row" style={{ marginBottom: 16, gap: 4 }}>
+        <button className={tab === 'live' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setTab('live')}>
+          🔴 진행 중
+        </button>
+        <button className={tab === 'past' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => { setTab('past'); setSelectedPast(null); }}>
+          📁 지난 라운드
+        </button>
+        <button className={tab === 'new' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setTab('new')}>
+          + 새 라운드
+        </button>
       </div>
 
-      <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--primary)' }}>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-          <div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>2026년 5월 라운드</div>
-              <span className="badge badge-success">진행 중</span>
+      {tab === 'live' && (
+        <>
+          <div className="card" style={{ marginBottom: 16, borderLeft: '3px solid var(--primary)' }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>2026년 5월 라운드</div>
+                  <span className="badge badge-success">진행 중</span>
+                </div>
+                <div className="muted" style={{ marginTop: 4 }}>입찰 2026-04-15 09:00 ~ 2026-04-22 18:00 · 계약 2026-05-01 ~ 2026-07-31</div>
+              </div>
+              <div className="row">
+                <button className="btn btn-outline">마감</button>
+                <button className="btn btn-primary">확정 실행</button>
+              </div>
             </div>
-            <div className="muted" style={{ marginTop: 4 }}>2026-04-15 09:00 ~ 2026-04-22 18:00 · 3개월 계약</div>
-          </div>
-          <div className="row">
-            <button className="btn btn-outline">마감</button>
-            <button className="btn btn-primary">확정 실행</button>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
-          {[
-            { l: '대상 구역', v: '18칸' },
-            { l: '참여자', v: '48명' },
-            { l: '총 입찰', v: '73건' },
-            { l: '남은 시간', v: 'D-3' },
-          ].map((s, i) => (
-            <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
-              <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
-              <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{s.v}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
+              {[
+                { l: '대상 구역', v: '18칸' },
+                { l: '참여자', v: '48명' },
+                { l: '총 입찰', v: '73건' },
+                { l: '남은 시간', v: 'D-3' },
+              ].map((s, i) => (
+                <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
+                  <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{s.v}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="card" style={{ padding: 0, marginBottom: 16 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>실시간 입찰 현황</div>
-          <span className="badge badge-success">2026년 5월 라운드</span>
-          <div className="grow" />
-          <input className="input" placeholder="🔍 구역 번호" style={{ width: 180, height: 32, fontSize: 12 }} />
-        </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>구역</th>
-              <th>현재 최고가</th>
-              <th>참여자</th>
-              <th>최종 입찰</th>
-              <th>최고가 입주민</th>
-              <th style={{ width: 80 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { n: 'C-03', top: 200000, bidders: 5, last: '3분 전', who: '박지민 · 105동 1503호', hot: true },
-              { n: 'A-23', top: 180000, bidders: 3, last: '12분 전', who: '김철수 · 101동 1201호', hot: true },
-              { n: 'B-09', top: 140000, bidders: 2, last: '28분 전', who: '최민석 · 102동 0804호' },
-              { n: 'B-07', top: 120000, bidders: 1, last: '2시간 전', who: '이영희 · 103동 0902호' },
-              { n: 'A-21', top: 100000, bidders: 1, last: '4시간 전', who: '정수민 · 101동 0802호' },
-              { n: 'D-01', top: null,   bidders: 0, last: '—',       who: '—', empty: true },
-              { n: 'D-02', top: null,   bidders: 0, last: '—',       who: '—', empty: true },
-              { n: 'C-11', top: null,   bidders: 0, last: '—',       who: '—', empty: true },
-            ].map(r => (
-              <tr key={r.n} style={{ opacity: r.empty ? 0.55 : 1 }}>
-                <td style={{ fontWeight: 700 }}>
-                  {r.n} {r.hot && <span className="badge badge-warn" style={{ marginLeft: 6 }}>🔥 경쟁</span>}
-                </td>
-                <td style={{ fontWeight: 700, color: r.top ? 'var(--primary)' : 'var(--n400)' }}>
-                  {r.top ? r.top.toLocaleString() + '원' : '입찰 없음'}
-                </td>
-                <td>{r.bidders > 0 ? `${r.bidders}명` : <span className="muted">—</span>}</td>
-                <td className="muted" style={{ fontSize: 12 }}>{r.last}</td>
-                <td style={{ fontSize: 13 }}>{r.empty ? <span className="muted">—</span> : r.who}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>내역</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ padding: '10px 16px', background: 'var(--n50)', borderTop: '1px solid var(--n100)', fontSize: 12, color: 'var(--n500)' }}>
-          💡 입찰이 들어올 때마다 표가 업데이트됩니다. 최고가 초과만 입찰 가능 — 동점은 발생하지 않아요.
-        </div>
-      </div>
+          <div className="card" style={{ padding: 0 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>실시간 입찰 현황</div>
+              <span className="badge badge-success">2026년 5월 라운드</span>
+              <div className="grow" />
+              <input className="input" placeholder="🔍 구역 번호" style={{ width: 180, height: 32, fontSize: 12 }} />
+            </div>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>구역</th><th>현재 최고가</th><th>참여자</th><th>최종 입찰</th><th>최고가 입주민</th><th style={{ width: 80 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { n: 'C-03', top: 200000, bidders: 5, last: '3분 전', who: '박지민 · 105동 1503호', hot: true },
+                  { n: 'A-23', top: 180000, bidders: 3, last: '12분 전', who: '김철수 · 101동 1201호', hot: true },
+                  { n: 'B-09', top: 140000, bidders: 2, last: '28분 전', who: '최민석 · 102동 0804호' },
+                  { n: 'B-07', top: 120000, bidders: 1, last: '2시간 전', who: '이영희 · 103동 0902호' },
+                  { n: 'A-21', top: 100000, bidders: 1, last: '4시간 전', who: '정수민 · 101동 0802호' },
+                  { n: 'D-01', top: null, bidders: 0, last: '—', who: '—', empty: true },
+                  { n: 'D-02', top: null, bidders: 0, last: '—', who: '—', empty: true },
+                  { n: 'C-11', top: null, bidders: 0, last: '—', who: '—', empty: true },
+                ].map(r => (
+                  <tr key={r.n} style={{ opacity: r.empty ? 0.55 : 1 }}>
+                    <td style={{ fontWeight: 700 }}>
+                      {r.n} {r.hot && <span className="badge badge-warn" style={{ marginLeft: 6 }}>🔥 경쟁</span>}
+                    </td>
+                    <td style={{ fontWeight: 700, color: r.top ? 'var(--primary)' : 'var(--n400)' }}>
+                      {r.top ? r.top.toLocaleString() + '원' : '입찰 없음'}
+                    </td>
+                    <td>{r.bidders > 0 ? `${r.bidders}명` : <span className="muted">—</span>}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>{r.last}</td>
+                    <td style={{ fontSize: 13 }}>{r.empty ? <span className="muted">—</span> : r.who}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>내역</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ padding: '10px 16px', background: 'var(--n50)', borderTop: '1px solid var(--n100)', fontSize: 12, color: 'var(--n500)' }}>
+              💡 입찰이 들어올 때마다 표가 업데이트됩니다. 최고가 초과만 입찰 가능 — 동점은 발생하지 않아요.
+            </div>
+          </div>
+        </>
+      )}
 
-      <div className="card" style={{ padding: 0 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>지난 라운드</div>
-        <table className="table">
-          <thead>
-            <tr><th>이름</th><th>기간</th><th>대상</th><th>확정</th><th>상태</th></tr>
-          </thead>
-          <tbody>
-            <tr><td style={{ fontWeight: 600 }}>2026년 2월 라운드</td><td className="muted">2026-01-15 ~ 01-22</td><td>18칸</td><td>15 / 18</td><td><span className="badge badge-neutral">완료</span></td></tr>
-            <tr><td style={{ fontWeight: 600 }}>2025년 11월 라운드</td><td className="muted">2025-10-15 ~ 10-22</td><td>18칸</td><td>16 / 18</td><td><span className="badge badge-neutral">완료</span></td></tr>
-          </tbody>
-        </table>
-      </div>
+      {tab === 'past' && !selectedPast && (
+        <div className="card" style={{ padding: 0 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>
+            지난 라운드 <span className="muted" style={{ fontWeight: 400, marginLeft: 4 }}>— 행을 클릭하면 낙찰 상세를 확인할 수 있어요</span>
+          </div>
+          <table className="table">
+            <thead>
+              <tr><th>이름</th><th>입찰 기간</th><th>계약 기간</th><th>확정</th><th></th></tr>
+            </thead>
+            <tbody>
+              {PAST_ROUNDS.map(r => (
+                <tr key={r.id} onClick={() => setSelectedPast(r)} style={{ cursor: 'pointer' }}>
+                  <td style={{ fontWeight: 600 }}>{r.name}</td>
+                  <td className="muted">{r.bidPeriod}</td>
+                  <td className="muted">{r.contract}</td>
+                  <td>{r.awarded} / {r.total}</td>
+                  <td style={{ textAlign: 'right', color: 'var(--primary)', fontSize: 12, fontWeight: 600 }}>상세 →</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'past' && selectedPast && (
+        <>
+          <div className="row" style={{ marginBottom: 12 }}>
+            <button className="btn btn-ghost" onClick={() => setSelectedPast(null)}>← 목록으로</button>
+          </div>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{selectedPast.name}</div>
+            <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+              입찰 {selectedPast.bidPeriod} · 계약 {selectedPast.contract}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
+              {[
+                { l: '대상 구역', v: `${selectedPast.total}칸` },
+                { l: '낙찰', v: `${selectedPast.awarded}칸` },
+                { l: '미낙찰', v: `${selectedPast.total - selectedPast.awarded}칸` },
+                { l: '평균 낙찰가', v: fmt(Math.round(selectedPast.bids.reduce((a,b) => a + b.amount, 0) / selectedPast.bids.length)) },
+              ].map((s, i) => (
+                <div key={i} style={{ padding: 12, background: 'var(--n50)', borderRadius: 8 }}>
+                  <div className="muted" style={{ fontSize: 11 }}>{s.l}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="card" style={{ padding: 0 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>낙찰 상세</div>
+            <table className="table">
+              <thead>
+                <tr><th>구역</th><th>낙찰자</th><th>동/호</th><th>낙찰가</th><th>경쟁</th></tr>
+              </thead>
+              <tbody>
+                {selectedPast.bids.map(b => (
+                  <tr key={b.n}>
+                    <td style={{ fontWeight: 700 }}>{b.n}</td>
+                    <td>{b.winner}</td>
+                    <td className="muted">{b.dong}동 {b.ho}호</td>
+                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{fmt(b.amount)}</td>
+                    <td className="muted">{b.bidders}명</td>
+                  </tr>
+                ))}
+                {selectedPast.empty.map(n => (
+                  <tr key={n} style={{ opacity: 0.55 }}>
+                    <td style={{ fontWeight: 700 }}>{n}</td>
+                    <td className="muted">—</td>
+                    <td className="muted">—</td>
+                    <td className="muted">미낙찰</td>
+                    <td className="muted">0명</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {tab === 'new' && (
+        <div className="card">
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>새 라운드 생성</div>
+          <div className="stack">
+            <div><label className="label">라운드 이름</label><input className="input" defaultValue="2026년 5월 라운드" /></div>
+            <div>
+              <label className="label">입찰 기간</label>
+              <div className="row">
+                <div className="grow">
+                  <div className="row" style={{ gap: 6 }}>
+                    <input type="date" className="input" value={bidStartDate} onChange={e => setBidStartDate(e.target.value)} style={{ flex: 2 }} />
+                    <input type="time" className="input" value={bidStartTime} onChange={e => setBidStartTime(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>시작</div>
+                </div>
+                <div className="grow">
+                  <div className="row" style={{ gap: 6 }}>
+                    <input type="date" className="input" value={bidEndDate} onChange={e => setBidEndDate(e.target.value)} style={{ flex: 2 }} />
+                    <input type="time" className="input" value={bidEndTime} onChange={e => setBidEndTime(e.target.value)} style={{ flex: 1 }} />
+                  </div>
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>마감</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="label">계약 기간</label>
+              <div className="row">
+                <div className="grow">
+                  <input type="date" className="input" value={contractStart} onChange={e => setContractStart(e.target.value)} />
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>시작</div>
+                </div>
+                <div className="grow">
+                  <input type="date" className="input" value={contractEnd} onChange={e => setContractEnd(e.target.value)} />
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>종료</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="label">대상 구역</label>
+              <div style={{ padding: '10px 12px', background: 'var(--n50)', borderRadius: 8, fontSize: 13 }}>
+                <b>활성화된 주차 구역 전체</b>
+                {activeCount !== null && <span className="muted"> · {activeCount}칸</span>}
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  비활성화된 구역과 전기차·장애인·방문객 구역은 자동 제외됩니다.
+                </div>
+              </div>
+            </div>
+            <div style={{ background: 'var(--n50)', padding: 12, borderRadius: 8, fontSize: 12 }} className="muted">
+              💡 시작 시각이 되면 입주민 앱에 자동으로 알림이 발송됩니다.<br/>
+              ⚖️ 최고가보다 <b style={{ color: 'var(--n900)' }}>높은 금액</b>만 입찰 가능 — 동점은 발생하지 않습니다.
+            </div>
+            <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setTab('live')}>취소</button>
+              <button className="btn btn-primary" onClick={() => setTab('live')}>생성하기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -506,7 +696,7 @@ function ComplexPage() {
               </div>
             </div>
             <div className="muted" style={{ fontSize: 12 }}>
-              💡 계약 기간은 <b>라운드 마법사</b>에서 라운드별로 달력으로 지정합니다.
+              💡 계약 기간은 <b>입찰 라운드 &gt; 새 라운드</b>에서 라운드별로 달력으로 지정합니다.
             </div>
           </div>
         </div>
