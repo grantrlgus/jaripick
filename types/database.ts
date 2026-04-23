@@ -339,6 +339,74 @@ export type Database = {
         }>;
         Relationships: [];
       };
+      complaints: {
+        Row: {
+          id: string;
+          complex: string;
+          dong: string;
+          ho: string;
+          author_name: string;
+          phone: string | null;
+          category: string;
+          title: string;
+          body: string;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex?: string;
+          dong: string;
+          ho: string;
+          author_name: string;
+          phone?: string | null;
+          category?: string;
+          title: string;
+          body: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          category: string;
+          title: string;
+          body: string;
+          status: string;
+          updated_at: string;
+        }>;
+        Relationships: [];
+      };
+      complaint_replies: {
+        Row: {
+          id: string;
+          complaint_id: string;
+          author_role: string;
+          author_name: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complaint_id: string;
+          author_role: string;
+          author_name: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: Partial<{
+          body: string;
+        }>;
+        Relationships: [
+          {
+            foreignKeyName: "complaint_replies_complaint_id_fkey";
+            columns: ["complaint_id"];
+            isOneToOne: false;
+            referencedRelation: "complaints";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       payments: {
         Row: {
           id: string;

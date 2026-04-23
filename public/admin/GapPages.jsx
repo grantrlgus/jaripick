@@ -174,67 +174,220 @@ function RoundWizardPage({ go }) {
 // ─── AG3: Complaints ────────────────────────────────────────────
 function ComplaintsPage() {
   const [cat, setCat] = React.useState('all');
-  const rows = [
-    { t: '2026-04-20 14:22', by: '김철수 (101동 1201호)', subj: 'A-23 옆 기둥 때문에 주차가 어려워요', s: 'new', c: 'complex' },
-    { t: '2026-04-20 12:10', by: '이영희 (103동 0902호)', subj: '앱에서 입찰 버튼이 안 눌려요', s: 'new', c: 'platform' },
-    { t: '2026-04-20 10:08', by: '박민수 (105동 0503호)', subj: '낙찰가가 너무 높은 것 같아요 · 환불 문의', s: 'progress', c: 'complex' },
-    { t: '2026-04-19 21:30', by: '정수민 (101동 0802호)', subj: '결제 오류 · 관리비 이중 청구', s: 'progress', c: 'platform' },
-    { t: '2026-04-18 16:45', by: '조현우 (104동 2101호)', subj: '입주민 승인 지연 문의', s: 'done', c: 'complex' },
-    { t: '2026-04-17 09:12', by: '한예슬 (106동 0301호)', subj: '차량번호 변경 요청', s: 'done', c: 'complex' },
-  ];
-  const filtered = cat === 'all' ? rows : rows.filter(r => r.c === cat);
-  const platform = rows.filter(r => r.c === 'platform' && r.s !== 'done');
+  const [stat, setStat] = React.useState('all');
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [selected, setSelected] = React.useState(null); // complaint row
 
-  const badge = (s) => s === 'new' ? <span className="badge badge-warn">신규</span>
-    : s === 'progress' ? <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>진행 중</span>
+  const refetch = React.useCallback(() => {
+    setLoading(true);
+    const qs = new URLSearchParams({ complex: 'heliocity' });
+    if (cat !== 'all') qs.set('category', cat);
+    if (stat !== 'all') qs.set('status', stat);
+    fetch('/api/complaints?' + qs.toString(), { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setRows(d); })
+      .finally(() => setLoading(false));
+  }, [cat, stat]);
+
+  React.useEffect(() => { refetch(); }, [refetch]);
+
+  const fmt = (s) => s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  const statusBadge = (s) => s === 'open' ? <span className="badge badge-warn">신규</span>
+    : s === 'in_progress' ? <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>진행 중</span>
+    : s === 'escalated' ? <span className="badge badge-danger">🔧 본사 확인</span>
     : <span className="badge badge-neutral">완료</span>;
   const catBadge = (c) => c === 'platform'
     ? <span className="badge badge-danger">🔧 플랫폼</span>
     : <span className="badge badge-neutral">단지 운영</span>;
 
+  const platformOpen = rows.filter(r => r.category === 'platform' && r.status !== 'done').length;
+
+  if (selected) {
+    return <ComplaintThreadPanel complaint={selected} onBack={() => { setSelected(null); refetch(); }} />;
+  }
+
   return (
     <div>
       <h1 className="title">민원 / 문의</h1>
-      <p className="subtitle">입주민 ↔ 관리자 1:1 문의 · 카테고리 자동 분류</p>
+      <p className="subtitle">입주민 ↔ 관리자 1:1 문의 · 앱 관련은 자동으로 본사에 에스컬레이션</p>
 
-      {platform.length > 0 && (
+      {platformOpen > 0 && (
         <div className="card" style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', marginBottom: 16 }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#991B1B' }}>🔧 플랫폼 이슈 {platform.length}건이 접수되었습니다</div>
-              <div className="muted" style={{ marginTop: 4, fontSize: 13, color: '#991B1B' }}>앱 버그·결제 오류 등 자리픽 운영팀 확인이 필요한 건입니다.</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#991B1B' }}>🔧 플랫폼 이슈 {platformOpen}건이 접수되어있어요</div>
+              <div className="muted" style={{ marginTop: 4, fontSize: 13, color: '#991B1B' }}>앱 버그·결제 오류 등 자리픽 운영팀 확인 대상입니다. 참고만 해주세요.</div>
             </div>
-            <button className="btn btn-danger" style={{ background: '#EF4444' }}>운영팀에 전달</button>
           </div>
         </div>
       )}
 
       <div className="row" style={{ marginBottom: 12 }}>
-        <button className={cat === 'all' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('all')}>전체 {rows.length}</button>
-        <button className={cat === 'complex' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('complex')}>단지 운영 {rows.filter(r => r.c === 'complex').length}</button>
-        <button className={cat === 'platform' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('platform')}>🔧 플랫폼 {rows.filter(r => r.c === 'platform').length}</button>
+        <button className={cat === 'all' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('all')}>전체</button>
+        <button className={cat === 'complex' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('complex')}>단지 운영</button>
+        <button className={cat === 'platform' ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => setCat('platform')}>🔧 플랫폼</button>
         <div className="grow"></div>
-        <input className="input" placeholder="🔍 제목/작성자 검색" style={{ width: 260 }} />
+        <select className="input" value={stat} onChange={e => setStat(e.target.value)} style={{ width: 140 }}>
+          <option value="all">모든 상태</option>
+          <option value="open">신규</option>
+          <option value="in_progress">진행 중</option>
+          <option value="escalated">본사 확인</option>
+          <option value="done">완료</option>
+        </select>
+        <button className="btn btn-outline" onClick={refetch}>🔄 새로고침</button>
       </div>
       <div className="card" style={{ padding: 0 }}>
         <table className="table">
           <thead><tr><th>일시</th><th>카테고리</th><th>작성자</th><th>제목</th><th>상태</th><th></th></tr></thead>
           <tbody>
-            {filtered.map((r, i) => (
-              <tr key={i}>
-                <td className="muted">{r.t}</td>
-                <td>{catBadge(r.c)}</td>
-                <td>{r.by}</td>
-                <td style={{ fontWeight: 600 }}>{r.subj}</td>
-                <td>{badge(r.s)}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px' }}>답변</button>
-                </td>
+            {loading ? (
+              <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 16 }}>불러오는 중…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 24 }}>접수된 문의가 없어요.</td></tr>
+            ) : rows.map((r) => (
+              <tr key={r.id} onClick={() => setSelected(r)} style={{ cursor: 'pointer' }}>
+                <td className="muted">{fmt(r.created_at)}</td>
+                <td>{catBadge(r.category)}</td>
+                <td>{r.author_name} ({r.dong}동 {r.ho}호)</td>
+                <td style={{ fontWeight: 600 }}>{r.title}</td>
+                <td>{statusBadge(r.status)}</td>
+                <td style={{ textAlign: 'right', color: 'var(--primary)', fontSize: 12, fontWeight: 600 }}>열기 →</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function ComplaintThreadPanel({ complaint, onBack }) {
+  const [detail, setDetail] = React.useState(null);
+  const [reply, setReply] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+
+  const load = React.useCallback(() => {
+    fetch(`/api/complaints/${complaint.id}`, { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(setDetail);
+  }, [complaint.id]);
+  React.useEffect(() => { load(); }, [load]);
+
+  const sendReply = async () => {
+    if (!reply.trim() || sending) return;
+    setSending(true);
+    const res = await fetch(`/api/complaints/${complaint.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_role: 'admin', body: reply.trim() }),
+    });
+    setSending(false);
+    if (res.ok) { setReply(''); load(); }
+  };
+
+  const changeStatus = async (next) => {
+    if (!confirm(next === 'done' ? '완료 처리할까요?' : '상태를 변경할까요?')) return;
+    const res = await fetch(`/api/complaints/${complaint.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: next }),
+    });
+    if (res.ok) load();
+  };
+
+  const fmt = (s) => s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+  const c = detail ? detail.complaint : complaint;
+  const replies = detail ? detail.replies : [];
+
+  const bubbleStyle = (role) => ({
+    alignSelf: role === 'admin' ? 'flex-end' : 'flex-start',
+    maxWidth: '80%',
+    padding: '10px 14px',
+    borderRadius: 10,
+    background: role === 'admin' ? 'var(--primary-light)' : role === 'system' ? '#FEF9C3' : 'var(--n100)',
+    color: role === 'admin' ? 'var(--primary)' : 'var(--n900)',
+    fontSize: 13,
+    whiteSpace: 'pre-wrap',
+  });
+
+  return (
+    <div>
+      <div className="row" style={{ marginBottom: 12 }}>
+        <button className="btn btn-ghost" onClick={onBack}>← 목록으로</button>
+      </div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{c.title}</div>
+              <span className={`badge ${c.category === 'platform' ? 'badge-danger' : 'badge-neutral'}`}>
+                {c.category === 'platform' ? '🔧 플랫폼' : '단지 운영'}
+              </span>
+              <span className={`badge ${c.status === 'open' ? 'badge-warn' : c.status === 'done' ? 'badge-neutral' : c.status === 'escalated' ? 'badge-danger' : ''}`}
+                style={c.status === 'in_progress' ? { background: 'var(--primary-light)', color: 'var(--primary)' } : undefined}>
+                {c.status === 'open' ? '신규' : c.status === 'in_progress' ? '진행 중' : c.status === 'escalated' ? '본사 확인' : '완료'}
+              </span>
+            </div>
+            <div className="muted" style={{ marginTop: 4, fontSize: 13 }}>
+              {c.author_name} · {c.dong}동 {c.ho}호 {c.phone ? `· ${c.phone}` : ''} · 작성 {fmt(c.created_at)}
+            </div>
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            {c.status !== 'done' && (
+              <button className="btn btn-primary" style={{ height: 32, fontSize: 12, padding: '0 12px' }} onClick={() => changeStatus('done')}>
+                완료 처리
+              </button>
+            )}
+            {c.status === 'done' && (
+              <button className="btn btn-outline" style={{ height: 32, fontSize: 12, padding: '0 12px' }} onClick={() => changeStatus('in_progress')}>
+                다시 열기
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>대화</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Original body as first bubble from resident */}
+          <div style={bubbleStyle('resident')}>
+            <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, opacity: 0.7 }}>
+              {c.author_name} · {fmt(c.created_at)}
+            </div>
+            {c.body}
+          </div>
+          {replies.map(r => (
+            <div key={r.id} style={bubbleStyle(r.author_role)}>
+              <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4, opacity: 0.7 }}>
+                {r.author_role === 'admin' ? '👤 ' : r.author_role === 'system' ? '🤖 ' : ''}
+                {r.author_name} · {fmt(r.created_at)}
+              </div>
+              {r.body}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {c.status !== 'done' && (
+        <div className="card">
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>답변 작성</div>
+          <textarea
+            className="input"
+            style={{ minHeight: 100, resize: 'vertical' }}
+            placeholder="답변 내용을 입력하세요…"
+            value={reply}
+            onChange={e => setReply(e.target.value)}
+          />
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+            <button className="btn btn-primary" onClick={sendReply} disabled={sending || !reply.trim()}>
+              {sending ? '전송 중…' : '답변 보내기'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

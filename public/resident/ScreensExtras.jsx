@@ -160,6 +160,7 @@ function SettingsScreen({ go }) {
     { e: '🚗', l: '차량 정보', s: profile.plate || '등록된 차량 없음', to: 'vehicle' },
     { e: '🔔', l: '알림 설정', s: '입찰, 라운드, 공지', to: null },
     { e: '💳', l: '결제 수단', s: '관리비 합산', to: null },
+    { e: '💬', l: '문의 / 민원', s: '관리사무소 · 자리픽 운영팀', to: 'support' },
     { e: '❓', l: '도움말 / FAQ', s: null, to: 'faq' },
     { e: '📋', l: '이용약관 · 개인정보', s: null, to: null },
   ];
@@ -616,6 +617,245 @@ function FaqScreen({ go }) {
   );
 }
 
+// ─── Support (민원 / 문의) ─────────────────────────────────────
+function SupportScreen({ go }) {
+  const creds = (() => {
+    try {
+      return {
+        dong: localStorage.getItem('jp_dong') || '',
+        ho: localStorage.getItem('jp_ho') || '',
+        name: localStorage.getItem('jp_name') || '',
+      };
+    } catch { return { dong: '', ho: '', name: '' }; }
+  })();
+
+  const [tab, setTab] = React.useState('new'); // new | list
+  const [category, setCategory] = React.useState('complex');
+  const [title, setTitle] = React.useState('');
+  const [body, setBody] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [mine, setMine] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [openId, setOpenId] = React.useState(null);
+
+  const fmt = (s) => s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  const refetch = React.useCallback(() => {
+    if (!creds.dong || !creds.ho) return;
+    setLoading(true);
+    const qs = new URLSearchParams({ complex: 'heliocity', dong: creds.dong, ho: creds.ho });
+    fetch('/api/complaints?' + qs.toString(), { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { if (Array.isArray(d)) setMine(d); })
+      .finally(() => setLoading(false));
+  }, [creds.dong, creds.ho]);
+
+  React.useEffect(() => { if (tab === 'list') refetch(); }, [tab, refetch]);
+
+  const submit = async () => {
+    if (!title.trim() || !body.trim()) { alert('제목과 본문을 입력해주세요'); return; }
+    if (!creds.dong || !creds.ho || !creds.name) { alert('로그인 정보가 없어요'); return; }
+    setSending(true);
+    const res = await fetch('/api/complaints', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        complex: 'heliocity',
+        dong: creds.dong, ho: creds.ho, author_name: creds.name,
+        category, title: title.trim(), body: body.trim(),
+      }),
+    });
+    setSending(false);
+    if (!res.ok) return;
+    setTitle(''); setBody(''); setCategory('complex');
+    setTab('list');
+    refetch();
+  };
+
+  const statusMeta = (s) => s === 'open' ? { label: '신규', bg: '#FEF3C7', fg: '#B45309' }
+    : s === 'in_progress' ? { label: '답변 중', bg: C.primaryLight, fg: C.primary }
+    : s === 'escalated' ? { label: '본사 확인', bg: '#FEE2E2', fg: '#B91C1C' }
+    : { label: '완료', bg: C.n100, fg: C.n500 };
+  const catMeta = (c) => c === 'platform' ? '🔧 앱 관련' : '단지 운영';
+
+  return (
+    <JPScreen>
+      <JPHeader left={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => go('settings')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, cursor: 'pointer', color: C.n700 }}>‹</button>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>문의 / 민원</div>
+        </div>
+      } />
+
+      <div style={{ padding: '12px 20px 0', display: 'flex', gap: 6 }}>
+        <button onClick={() => setTab('new')} style={{
+          flex: 1, height: 36, borderRadius: 8, border: 0, cursor: 'pointer', fontFamily: jpFont,
+          background: tab === 'new' ? C.primary : C.white,
+          color: tab === 'new' ? C.white : C.n700,
+          fontSize: 13, fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,.04)',
+        }}>새 문의</button>
+        <button onClick={() => setTab('list')} style={{
+          flex: 1, height: 36, borderRadius: 8, border: 0, cursor: 'pointer', fontFamily: jpFont,
+          background: tab === 'list' ? C.primary : C.white,
+          color: tab === 'list' ? C.white : C.n700,
+          fontSize: 13, fontWeight: 600, boxShadow: '0 1px 3px rgba(0,0,0,.04)',
+        }}>내 문의</button>
+      </div>
+
+      {tab === 'new' && (
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 100 }}>
+          <div style={{ background: C.white, borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>카테고리</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { k: 'complex', t: '단지 운영', d: '주차 / 승인 / 관리비' },
+                { k: 'platform', t: '🔧 앱 관련', d: '버그 / 오류 / 로그인' },
+              ].map(o => (
+                <button key={o.k} onClick={() => setCategory(o.k)} style={{
+                  flex: 1, textAlign: 'left', padding: 12, borderRadius: 10, cursor: 'pointer',
+                  border: category === o.k ? `2px solid ${C.primary}` : `1px solid ${C.n100}`,
+                  background: category === o.k ? C.primaryLight : C.white, fontFamily: jpFont,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: category === o.k ? C.primary : C.n900 }}>{o.t}</div>
+                  <div style={{ fontSize: 11, color: C.n500, marginTop: 2 }}>{o.d}</div>
+                </button>
+              ))}
+            </div>
+            {category === 'platform' && (
+              <div style={{ marginTop: 10, padding: 10, background: '#FEF9C3', borderRadius: 8, fontSize: 12, color: '#854D0E', lineHeight: 1.5 }}>
+                💡 앱/결제 오류는 자리픽 운영팀에 자동으로 전달돼요. 관리사무소가 아닌 본사 담당자가 연락드립니다.
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: C.white, borderRadius: 12, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>제목</div>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: A-23 구역 옆 기둥 때문에 주차가 어려워요" style={{
+              width: '100%', height: 40, border: `1px solid ${C.n100}`, borderRadius: 8, padding: '0 12px',
+              fontSize: 14, fontFamily: jpFont, boxSizing: 'border-box',
+            }} />
+            <div style={{ fontSize: 13, fontWeight: 600, margin: '14px 0 8px' }}>내용</div>
+            <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="문의 내용을 자세히 적어주세요" style={{
+              width: '100%', minHeight: 140, border: `1px solid ${C.n100}`, borderRadius: 8, padding: 12,
+              fontSize: 14, fontFamily: jpFont, boxSizing: 'border-box', resize: 'vertical',
+            }} />
+          </div>
+
+          <button onClick={submit} disabled={sending || !title.trim() || !body.trim()} style={{
+            height: 48, background: (!title.trim() || !body.trim()) ? C.n300 : C.primary, color: C.white,
+            borderRadius: 12, border: 0, fontSize: 14, fontWeight: 700, cursor: sending ? 'wait' : 'pointer',
+            fontFamily: jpFont,
+          }}>
+            {sending ? '접수 중…' : '문의 접수'}
+          </button>
+        </div>
+      )}
+
+      {tab === 'list' && (
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 100 }}>
+          {loading ? (
+            <div style={{ textAlign: 'center', color: C.n500, padding: 40 }}>불러오는 중…</div>
+          ) : mine.length === 0 ? (
+            <div style={{ background: C.white, borderRadius: 12, padding: 40, textAlign: 'center', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+              <div style={{ fontSize: 14, color: C.n500 }}>접수한 문의가 없어요</div>
+            </div>
+          ) : mine.map(c => {
+            const meta = statusMeta(c.status);
+            const isOpen = openId === c.id;
+            return (
+              <div key={c.id} style={{ background: C.white, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,.05)' }}>
+                <button onClick={() => setOpenId(isOpen ? null : c.id)} style={{
+                  width: '100%', padding: 14, background: 'transparent', border: 0, cursor: 'pointer',
+                  textAlign: 'left', fontFamily: jpFont,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: meta.bg, color: meta.fg, fontWeight: 700 }}>{meta.label}</span>
+                    <span style={{ fontSize: 11, color: C.n500 }}>{catMeta(c.category)}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: C.n400 }}>{fmt(c.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{c.title}</div>
+                </button>
+                {isOpen && (
+                  <SupportThreadInline complaintId={c.id} creds={creds} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </JPScreen>
+  );
+}
+
+function SupportThreadInline({ complaintId, creds }) {
+  const [detail, setDetail] = React.useState(null);
+  const [reply, setReply] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+
+  const load = React.useCallback(() => {
+    const qs = new URLSearchParams({ dong: creds.dong, ho: creds.ho });
+    fetch(`/api/complaints/${complaintId}?` + qs.toString(), { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null).then(setDetail);
+  }, [complaintId, creds.dong, creds.ho]);
+  React.useEffect(() => { load(); }, [load]);
+
+  const send = async () => {
+    if (!reply.trim() || sending) return;
+    setSending(true);
+    const res = await fetch(`/api/complaints/${complaintId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ author_role: 'resident', author_name: creds.name, dong: creds.dong, ho: creds.ho, body: reply.trim() }),
+    });
+    setSending(false);
+    if (res.ok) { setReply(''); load(); }
+  };
+
+  const fmt = (s) => s ? new Date(s).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+  if (!detail) return <div style={{ padding: 14, color: C.n500, fontSize: 12 }}>대화 불러오는 중…</div>;
+  const c = detail.complaint;
+  const replies = detail.replies || [];
+
+  const bubble = (role, name, at, text, key) => (
+    <div key={key} style={{
+      display: 'flex', flexDirection: 'column',
+      alignItems: role === 'resident' ? 'flex-end' : 'flex-start',
+    }}>
+      <div style={{ fontSize: 11, color: C.n500, marginBottom: 2 }}>
+        {role === 'admin' ? '👤 관리자 ' : role === 'system' ? '🤖 ' : ''}{name} · {fmt(at)}
+      </div>
+      <div style={{
+        maxWidth: '85%', padding: '10px 14px', borderRadius: 12,
+        background: role === 'resident' ? C.primary : role === 'system' ? '#FEF9C3' : C.n100,
+        color: role === 'resident' ? C.white : C.n900,
+        fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
+      }}>{text}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ padding: 14, borderTop: `1px solid ${C.n100}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {bubble('resident', c.author_name, c.created_at, c.body, 'orig')}
+      {replies.map(r => bubble(r.author_role, r.author_name, r.created_at, r.body, r.id))}
+
+      {c.status !== 'done' && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <input value={reply} onChange={e => setReply(e.target.value)} placeholder="답변을 입력하세요" style={{
+            flex: 1, height: 36, borderRadius: 8, border: `1px solid ${C.n100}`, padding: '0 10px',
+            fontSize: 13, fontFamily: jpFont,
+          }} onKeyDown={e => { if (e.key === 'Enter') send(); }} />
+          <button onClick={send} disabled={sending || !reply.trim()} style={{
+            height: 36, padding: '0 14px', borderRadius: 8, border: 0,
+            background: reply.trim() ? C.primary : C.n300, color: C.white,
+            fontSize: 12, fontWeight: 700, cursor: sending ? 'wait' : 'pointer', fontFamily: jpFont,
+          }}>전송</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 Object.assign(window, {
   NotificationsScreen, SettingsScreen, PaymentScreen, ReBidCancelScreen, ErrorScreen, FaqScreen,
+  SupportScreen,
 });
