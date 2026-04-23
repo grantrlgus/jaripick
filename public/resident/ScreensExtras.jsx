@@ -235,24 +235,31 @@ function PaymentScreen({ go }) {
   React.useEffect(() => {
     (async () => {
       if (!creds.dong || !creds.ho) { setLoading(false); return; }
-      const [rounds, cells] = await Promise.all([
-        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      const [payments, cells] = await Promise.all([
+        fetch(`/api/payments?dong=${creds.dong}&ho=${creds.ho}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
         fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const cellById = {};
       (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
-      for (const r of (Array.isArray(rounds) ? rounds : []).filter(x => x.status === 'finalized')) {
-        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
-        const perCell = detail?.per_cell || {};
-        for (const [cid, e] of Object.entries(perCell)) {
-          if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
-            const c = cellById[cid];
-            setData({ spot: c ? c.n : cid, amount: e.top.amount, start: r.contract_start, end: r.contract_end });
-            setLoading(false);
-            return;
-          }
-        }
-      }
+      const items = Array.isArray(payments) ? payments : [];
+      if (items.length === 0) { setLoading(false); return; }
+      // 여러 낙찰 중 가장 최근 round_id의 스케줄 사용
+      items.sort((a, b) => b.due_date.localeCompare(a.due_date));
+      const latestRoundId = items[0].round_id;
+      const roundItems = items.filter(p => p.round_id === latestRoundId).sort((a, b) => a.period.localeCompare(b.period));
+      const c = cellById[roundItems[0].cell_id];
+      const total = roundItems.reduce((a, p) => a + p.amount, 0);
+      const start = roundItems[0].period + '-01';
+      const lastPeriod = roundItems[roundItems.length - 1].period;
+      const end = roundItems[roundItems.length - 1].due_date;
+      setData({
+        spot: c ? c.n : roundItems[0].cell_id,
+        amount: total,
+        start,
+        end,
+        months: roundItems.length,
+        items: roundItems,
+      });
       setLoading(false);
     })();
   }, [creds]);
@@ -277,25 +284,15 @@ function PaymentScreen({ go }) {
     );
   }
 
-  const { spot, amount: total, start, end } = data;
-  let months = 1;
-  let schedule = [];
-  if (start && end) {
-    const s = new Date(start), e = new Date(end);
-    months = Math.max(1, Math.round((e - s) / (30 * 86400000)));
-    const monthly = Math.round(total / months);
-    const today = new Date();
-    for (let i = 0; i < months; i++) {
-      const m = new Date(s.getFullYear(), s.getMonth() + i, 1);
-      const monthEnd = new Date(s.getFullYear(), s.getMonth() + i + 1, 0);
-      let status = 'upcoming';
-      if (today > monthEnd) status = 'paid';
-      else if (today >= m && today <= monthEnd) status = 'due';
-      schedule.push({ m: `${m.getFullYear()}년 ${m.getMonth() + 1}월`, amt: monthly, when: `${m.getMonth() + 1}월 관리비`, status });
-    }
-  } else {
-    schedule = [{ m: '전체', amt: total, when: '관리비', status: 'upcoming' }];
-  }
+  const { spot, amount: total, start, end, months, items } = data;
+  const schedule = (items || []).map(it => {
+    const [y, m] = it.period.split('-');
+    let status = 'upcoming';
+    if (it.status === 'paid') status = 'paid';
+    else if (it.status === 'overdue') status = 'due';
+    else if (new Date(it.due_date) < new Date()) status = 'due';
+    return { m: `${y}년 ${parseInt(m)}월`, amt: it.amount, when: `${parseInt(m)}월 관리비`, status, raw: it.status };
+  });
 
   return (
     <JPScreen bg={C.white}>

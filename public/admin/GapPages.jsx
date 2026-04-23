@@ -389,9 +389,17 @@ function AnnouncePage() {
               <div style={{ padding: 16 }} className="muted">아직 발송된 공지가 없어요.</div>
             ) : notices.map((r, i, arr) => (
               <div key={r.id} style={{ padding: '12px 16px', borderBottom: i === arr.length - 1 ? 0 : '1px solid var(--n100)' }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{r.title}</div>
-                <div className="row" style={{ marginTop: 4 }}>
-                  <span className="muted" style={{ flex: 1 }}>{relT(r.sent_at)} · {r.recipient_count || 0}명</span>
+                <div className="row" style={{ alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{r.title}</div>
+                    <div className="muted" style={{ marginTop: 4 }}>{relT(r.sent_at)} · {r.recipient_count || 0}명</div>
+                  </div>
+                  <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }}
+                    onClick={async () => {
+                      if (!confirm('이 공지를 삭제할까요?')) return;
+                      const res = await fetch(`/api/notices?id=${r.id}`, { method: 'DELETE' });
+                      if (res.ok) refetch();
+                    }}>삭제</button>
                 </div>
               </div>
             ))}
@@ -402,110 +410,128 @@ function AnnouncePage() {
   );
 }
 
-// ─── AG5: Payments / Settlement (past data + 관리비 합산) ─────────
+// ─── AG5: Payments / Settlement (실데이터 + 관리비 합산) ─────────
 function PaymentsPage() {
-  const [round, setRound] = React.useState('2026-05');
-  const ROUNDS = {
-    '2026-05': {
-      label: '2026년 5월 라운드',
-      period: '2026-05-01 ~ 2026-07-31 (3개월)',
-      rows: [
-        { n: 'A-23', w: '김철수',  amt: 180000, months: 3, s: 'billed', note: '관리비 합산 · 3개월 분할' },
-        { n: 'B-07', w: '이영희',  amt: 120000, months: 3, s: 'billed', note: '관리비 합산 · 3개월 분할' },
-        { n: 'B-09', w: '최민석',  amt: 140000, months: 3, s: 'billed', note: '관리비 합산 · 3개월 분할' },
-        { n: 'C-03', w: '박지민',  amt: 200000, months: 3, s: 'pending', note: '1회차 청구 대기' },
-        { n: 'C-11', w: '한예슬',  amt: 160000, months: 3, s: 'pending', note: '1회차 청구 대기' },
-      ],
-    },
-    '2026-02': {
-      label: '2026년 2월 라운드',
-      period: '2026-02-01 ~ 2026-04-30 (3개월)',
-      rows: [
-        { n: 'A-15', w: '김철수',  amt: 150000, months: 3, s: 'paid',    note: '3개월 전액 완납' },
-        { n: 'A-22', w: '이영희',  amt: 130000, months: 3, s: 'paid',    note: '3개월 전액 완납' },
-        { n: 'B-05', w: '박민수',  amt: 110000, months: 3, s: 'paid',    note: '3개월 전액 완납' },
-        { n: 'C-08', w: '조현우',  amt: 180000, months: 3, s: 'overdue', note: '3회차 연체' },
-        { n: 'D-02', w: '정수민',  amt: 100000, months: 3, s: 'paid',    note: '3개월 전액 완납' },
-      ],
-    },
-    '2025-11': {
-      label: '2025년 11월 라운드',
-      period: '2025-11-01 ~ 2026-01-31 (3개월)',
-      rows: [
-        { n: 'A-10', w: '김철수',  amt: 140000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-        { n: 'B-03', w: '한예슬',  amt: 125000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-        { n: 'C-05', w: '최민석',  amt: 175000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-        { n: 'C-12', w: '박지민',  amt: 160000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-      ],
-    },
-    '2025-08': {
-      label: '2025년 8월 라운드',
-      period: '2025-08-01 ~ 2025-10-31 (3개월)',
-      rows: [
-        { n: 'A-08', w: '이영희',  amt: 135000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-        { n: 'B-11', w: '조현우',  amt: 145000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-        { n: 'D-05', w: '정수민',  amt: 105000, months: 3, s: 'paid', note: '3개월 전액 완납' },
-      ],
-    },
+  const [rounds, setRounds] = React.useState([]);
+  const [roundId, setRoundId] = React.useState('');
+  const [cellById, setCellById] = React.useState({});
+  const [payments, setPayments] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const refetch = React.useCallback(async () => {
+    if (!roundId) return;
+    const d = await fetch(`/api/payments?round_id=${roundId}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []);
+    setPayments(Array.isArray(d) ? d : []);
+  }, [roundId]);
+
+  React.useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [rs, cells] = await Promise.all([
+        fetch('/api/rounds?status=finalized', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+      ]);
+      const finalized = Array.isArray(rs) ? rs : [];
+      setRounds(finalized);
+      const byId = {}; (Array.isArray(cells) ? cells : []).forEach(c => { byId[c.id] = c; });
+      setCellById(byId);
+      if (finalized.length > 0 && !roundId) setRoundId(finalized[0].id);
+      setLoading(false);
+    })();
+  }, []);
+
+  React.useEffect(() => { refetch(); }, [refetch]);
+
+  const toggleStatus = async (p, next) => {
+    const res = await fetch('/api/payments', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, status: next }),
+    });
+    if (res.ok) refetch();
   };
-  const data = ROUNDS[round];
-  const rows = data.rows;
-  const total = rows.reduce((a, r) => a + r.amt, 0);
-  const collected = rows.filter(r => r.s === 'paid').reduce((a, r) => a + r.amt, 0);
-  const billed = rows.filter(r => r.s === 'billed' || r.s === 'paid').reduce((a, r) => a + r.amt, 0);
-  const overdueCnt = rows.filter(r => r.s === 'overdue').length;
+
+  const round = rounds.find(r => r.id === roundId);
+  // Group rows by (cell_id, dong, ho) to render 1 line per household with per-month status
+  const groups = React.useMemo(() => {
+    const map = {};
+    for (const p of payments) {
+      const k = `${p.cell_id}|${p.dong}|${p.ho}`;
+      if (!map[k]) map[k] = { cell_id: p.cell_id, dong: p.dong, ho: p.ho, name: p.name, items: [] };
+      map[k].items.push(p);
+    }
+    return Object.values(map).map(g => ({ ...g, items: g.items.sort((a, b) => a.period.localeCompare(b.period)) }));
+  }, [payments]);
+
+  const totalAmt = groups.reduce((a, g) => a + g.items.reduce((x, i) => x + i.amount, 0), 0);
+  const paidAmt = payments.filter(p => p.status === 'paid').reduce((a, p) => a + p.amount, 0);
+  const overdueCnt = payments.filter(p => p.status === 'overdue').length;
 
   const badge = (s) => s === 'paid' ? <span className="badge badge-success">완납</span>
-    : s === 'billed' ? <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>청구 중</span>
     : s === 'overdue' ? <span className="badge badge-danger">연체</span>
+    : s === 'refunded' ? <span className="badge" style={{ background: '#eee', color: '#555' }}>환불</span>
     : <span className="badge badge-warn">대기</span>;
+  const nextStatus = (s) => s === 'pending' ? 'paid' : s === 'paid' ? 'overdue' : s === 'overdue' ? 'refunded' : 'pending';
 
   return (
     <div>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 className="title" style={{ marginBottom: 2 }}>정산 관리</h1>
-          <p className="subtitle" style={{ marginBottom: 0 }}>{data.label} · {data.period} · <b style={{ color: 'var(--primary)' }}>관리비 합산 청구</b></p>
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            {round ? `${round.name} · ${round.contract_start} ~ ${round.contract_end}` : '확정된 라운드 없음'} · <b style={{ color: 'var(--primary)' }}>관리비 합산 청구</b>
+          </p>
         </div>
-        <select className="input" value={round} onChange={e => setRound(e.target.value)} style={{ width: 220 }}>
-          {Object.keys(ROUNDS).map(k => <option key={k} value={k}>{ROUNDS[k].label}</option>)}
-        </select>
+        {rounds.length > 0 && (
+          <select className="input" value={roundId} onChange={e => setRoundId(e.target.value)} style={{ width: 260 }}>
+            {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
-        <div className="card"><div className="muted" style={{ fontSize: 12 }}>총 청구액</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{fmt(total)}</div></div>
-        <div className="card" style={{ borderLeft: '3px solid var(--primary)' }}><div className="muted" style={{ fontSize: 12 }}>청구 진행</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: 'var(--primary)' }}>{fmt(billed)}</div></div>
-        <div className="card" style={{ borderLeft: '3px solid var(--success)' }}><div className="muted" style={{ fontSize: 12 }}>수금 완료</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: 'var(--success)' }}>{fmt(collected)}</div></div>
-        <div className="card" style={{ borderLeft: '3px solid var(--danger)' }}><div className="muted" style={{ fontSize: 12 }}>연체</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: overdueCnt ? 'var(--danger)' : 'var(--n900)' }}>{overdueCnt}건</div></div>
-      </div>
-
-      <div className="card" style={{ padding: 0 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>청구 목록 · 관리비 합산</div>
-          {overdueCnt > 0 && <button className="btn btn-outline">연체자 일괄 알림</button>}
-          <button className="btn btn-outline">관리사무소 내보내기 (CSV)</button>
+      {loading ? (
+        <div className="muted" style={{ padding: 40, textAlign: 'center' }}>불러오는 중…</div>
+      ) : rounds.length === 0 ? (
+        <div className="card muted" style={{ padding: 40, textAlign: 'center' }}>
+          확정된 라운드가 없어요. 라운드를 확정하면 여기에 월별 분납 스케줄이 자동 생성됩니다.
         </div>
-        <table className="table">
-          <thead><tr><th>구역</th><th>낙찰자</th><th>총 금액</th><th>분할</th><th>월별 금액</th><th>상태</th><th>비고</th></tr></thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 700 }}>{r.n}</td>
-                <td>{r.w}</td>
-                <td style={{ fontWeight: 600 }}>{fmt(r.amt)}</td>
-                <td>{r.months > 1 ? `${r.months}개월` : '일시'}</td>
-                <td className="muted">{fmt(Math.round(r.amt / r.months))} / 월</td>
-                <td>{badge(r.s)}</td>
-                <td className="muted" style={{ fontSize: 12 }}>{r.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+            <div className="card"><div className="muted" style={{ fontSize: 12 }}>총 청구액</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{fmt(totalAmt)}</div></div>
+            <div className="card" style={{ borderLeft: '3px solid var(--success)' }}><div className="muted" style={{ fontSize: 12 }}>수금 완료</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: 'var(--success)' }}>{fmt(paidAmt)}</div></div>
+            <div className="card" style={{ borderLeft: '3px solid var(--danger)' }}><div className="muted" style={{ fontSize: 12 }}>연체</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: overdueCnt ? 'var(--danger)' : 'var(--n900)' }}>{overdueCnt}건</div></div>
+            <div className="card"><div className="muted" style={{ fontSize: 12 }}>낙찰 가구</div><div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }}>{groups.length}</div></div>
+          </div>
 
-      <div className="card" style={{ marginTop: 16, background: 'var(--n50)', fontSize: 13, color: 'var(--n700)' }}>
-        💡 자리픽은 <b>관리비 합산</b>만 지원합니다. 낙찰 금액은 관리사무소를 통해 입주민 관리비에 자동 합산되며, 계약 기간이 1개월 초과이면 개월별로 <b>분할 청구</b>됩니다.
-      </div>
+          <div className="card" style={{ padding: 0 }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, flex: 1 }}>청구 목록 · 회차별</div>
+            </div>
+            <table className="table">
+              <thead><tr><th>구역</th><th>세대</th><th>낙찰자</th><th>회차</th><th>월</th><th>금액</th><th>납기</th><th>상태</th><th>변경</th></tr></thead>
+              <tbody>
+                {groups.flatMap(g => g.items.map((it, idx) => (
+                  <tr key={it.id}>
+                    {idx === 0 && <td rowSpan={g.items.length} style={{ fontWeight: 700, verticalAlign: 'top' }}>{cellById[g.cell_id]?.n || g.cell_id}</td>}
+                    {idx === 0 && <td rowSpan={g.items.length} style={{ verticalAlign: 'top' }}>{g.dong}-{g.ho}</td>}
+                    {idx === 0 && <td rowSpan={g.items.length} style={{ verticalAlign: 'top' }}>{g.name}</td>}
+                    <td className="muted">{idx + 1}/{g.items.length}</td>
+                    <td>{it.period}</td>
+                    <td style={{ fontWeight: 600 }}>{fmt(it.amount)}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>{it.due_date}</td>
+                    <td>{badge(it.status)}</td>
+                    <td><button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => toggleStatus(it, nextStatus(it.status))}>다음 상태</button></td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card" style={{ marginTop: 16, background: 'var(--n50)', fontSize: 13, color: 'var(--n700)' }}>
+            💡 <b>관리비 합산</b> 방식입니다. 라운드 확정 시 월별 분납 스케줄이 자동 생성되며, 관리사무소에서 실제 수금 후 상태를 <b>완납</b>으로 변경해주세요.
+          </div>
+        </>
+      )}
     </div>
   );
 }

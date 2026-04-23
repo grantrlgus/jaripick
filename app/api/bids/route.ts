@@ -32,15 +32,24 @@ export async function POST(req: Request) {
   }
   const sb = createServiceClient();
 
-  // Check round is live
+  // Check round is live AND inside bid window
   const { data: round } = await sb
     .from("rounds")
-    .select("status")
+    .select("status, bid_start, bid_end")
     .eq("id", round_id)
     .maybeSingle();
   if (!round) return NextResponse.json({ error: "라운드를 찾을 수 없어요" }, { status: 404 });
   if (round.status !== "live") {
     return NextResponse.json({ error: "라운드가 마감되었거나 종료되었어요" }, { status: 400 });
+  }
+  const now = Date.now();
+  const startMs = round.bid_start ? new Date(round.bid_start).getTime() : 0;
+  const endMs = round.bid_end ? new Date(round.bid_end).getTime() : 0;
+  if (startMs && now < startMs) {
+    return NextResponse.json({ error: "아직 입찰이 시작되지 않았어요" }, { status: 400 });
+  }
+  if (endMs && now > endMs) {
+    return NextResponse.json({ error: "입찰이 마감되었어요" }, { status: 400 });
   }
 
   // 세대당 한 구역 원칙: 같은 라운드에 이 세대가 다른 구역에 입찰 중이면 기존 입찰 삭제

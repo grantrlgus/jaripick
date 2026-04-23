@@ -179,6 +179,61 @@ function JPEmptyState({ message, ctaLabel, onCta, emoji = '📭' }) {
   );
 }
 
+// ─── Toast (global) ─────────────────────────────────────────
+// 사용법: jpToast('메시지', 'error' | 'success' | 'info'). React 외부에서도 호출 가능.
+(function setupJPToast() {
+  if (typeof document === 'undefined') return;
+  let container = null;
+  const ensure = () => {
+    if (container && document.body.contains(container)) return container;
+    container = document.createElement('div');
+    container.id = 'jp-toast-container';
+    container.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:90vw;';
+    document.body.appendChild(container);
+    return container;
+  };
+  const bgByKind = { error: '#EF4444', success: '#10B981', info: '#374151' };
+  window.jpToast = function jpToast(message, kind) {
+    if (!message) return;
+    const c = ensure();
+    const t = document.createElement('div');
+    const bg = bgByKind[kind] || bgByKind.info;
+    t.style.cssText = `background:${bg};color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-family:${jpFont};box-shadow:0 4px 12px rgba(0,0,0,0.2);opacity:0;transform:translateY(-8px);transition:opacity .2s,transform .2s;pointer-events:auto;max-width:90vw;word-break:keep-all;`;
+    t.textContent = String(message);
+    c.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
+    setTimeout(() => {
+      t.style.opacity = '0';
+      t.style.transform = 'translateY(-8px)';
+      setTimeout(() => t.remove(), 200);
+    }, 3000);
+  };
+
+  // fetch 래퍼: 네트워크 오류 및 4xx/5xx 에러 자동 토스트.
+  // 단, 명시적으로 silent: true 옵션 주면 skip (409 confirm dialog 같은 경우).
+  const origFetch = window.fetch.bind(window);
+  window.fetch = async function patchedFetch(input, init) {
+    const silent = init && init.silent;
+    try {
+      const res = await origFetch(input, init);
+      if (!silent && !res.ok && res.status >= 400) {
+        // clone to read body without consuming
+        try {
+          const t = await res.clone().text();
+          let msg = `오류 (${res.status})`;
+          try { const j = JSON.parse(t); if (j.error) msg = j.error; } catch {}
+          // 409는 client가 직접 처리하는 경우가 많음 — 조용히
+          if (res.status !== 409) window.jpToast(msg, 'error');
+        } catch {}
+      }
+      return res;
+    } catch (e) {
+      if (!silent) window.jpToast('네트워크 연결을 확인해주세요', 'error');
+      throw e;
+    }
+  };
+})();
+
 Object.assign(window, {
   C, jpFont, JPScreen, JPHeader, JPTabBar, JPPrimaryButton, JPSecondaryButton,
   JPCard, JPDdayBadge, JPSpotBadge, JPSectionHeader, JPEmptyState,

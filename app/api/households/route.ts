@@ -40,7 +40,33 @@ export async function PUT(req: Request) {
     const { error } = await sb.from("households").insert(insert);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, count: rows.length });
+  const rematched = await rematchPending(sb, complex);
+  return NextResponse.json({ ok: true, count: rows.length, rematched });
+}
+
+// pending resident_requests에서 새 명단과 매치되는 건 자동 승인.
+// Returns count of newly approved.
+async function rematchPending(sb: ReturnType<typeof createServiceClient>, complex: string) {
+  const { data: pendings } = await sb
+    .from("resident_requests")
+    .select("id, dong, ho, name")
+    .eq("complex", complex)
+    .eq("status", "pending");
+  if (!pendings || pendings.length === 0) return 0;
+  const { data: households } = await sb
+    .from("households")
+    .select("dong, ho, name")
+    .eq("complex", complex);
+  const roster = new Set((households || []).map((h) => `${h.dong}|${h.ho}|${h.name}`));
+  const toApprove = pendings.filter((p) => roster.has(`${p.dong}|${p.ho}|${p.name}`));
+  if (toApprove.length === 0) return 0;
+  const ids = toApprove.map((p) => p.id);
+  const { error } = await sb
+    .from("resident_requests")
+    .update({ status: "approved", auto: true, decided_at: new Date().toISOString(), reason: null })
+    .in("id", ids);
+  if (error) return 0;
+  return toApprove.length;
 }
 
 export async function POST(req: Request) {
@@ -62,7 +88,8 @@ export async function POST(req: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data);
+  const rematched = await rematchPending(sb, body.complex || DEFAULT_COMPLEX);
+  return NextResponse.json({ ...data, rematched });
 }
 
 export async function DELETE(req: Request) {
