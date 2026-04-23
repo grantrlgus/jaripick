@@ -165,6 +165,7 @@ export type Database = {
           car_plate: string | null;
           car_size: string | null;
           ev: boolean;
+          auto: boolean;
         }>;
         Relationships: [];
       };
@@ -310,6 +311,75 @@ export type Database = {
             referencedColumns: ["id"];
           }
         ];
+      };
+      admin_users: {
+        Row: {
+          id: string;
+          auth_user_id: string;
+          email: string;
+          name: string;
+          role: string;
+          complex: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          auth_user_id: string;
+          email: string;
+          name: string;
+          role?: string;
+          complex?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<{
+          email: string;
+          name: string;
+          role: string;
+          complex: string | null;
+        }>;
+        Relationships: [];
+      };
+      payments: {
+        Row: {
+          id: string;
+          complex: string;
+          round_id: string;
+          cell_id: string;
+          dong: string;
+          ho: string;
+          name: string | null;
+          period: string;
+          amount: number;
+          status: string;
+          due_date: string | null;
+          paid_at: string | null;
+          memo: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          complex: string;
+          round_id: string;
+          cell_id: string;
+          dong: string;
+          ho: string;
+          name?: string | null;
+          period: string;
+          amount: number;
+          status?: string;
+          due_date?: string | null;
+          paid_at?: string | null;
+          memo?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<{
+          status: string;
+          paid_at: string | null;
+          memo: string | null;
+          amount: number;
+          due_date: string | null;
+        }>;
+        Relationships: [];
       };
     };
     Views: {

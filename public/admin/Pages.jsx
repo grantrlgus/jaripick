@@ -1,6 +1,6 @@
 // Admin console pages. Copies layout/content from jaripick-admin/src/pages/*.tsx
 
-function Sidebar({ active, go }) {
+function Sidebar({ active, go, admin, onLogout }) {
   const NAV = [
     { k: 'dashboard',  label: '📊  대시보드' },
     { k: 'layout',     label: '🗺️  구역 설정' },
@@ -13,6 +13,7 @@ function Sidebar({ active, go }) {
     { k: 'adminusers', label: '🔑  관리자 / 권한' },
     { k: 'complex',    label: '⚙️  단지 설정' },
   ];
+  const scope = admin && admin.role === 'super' ? '전체' : (admin && admin.complex) || '—';
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">자리픽 관리자</div>
@@ -21,7 +22,21 @@ function Sidebar({ active, go }) {
           <a key={n.k} className={active === n.k ? 'active' : ''} onClick={() => go(n.k)}>{n.label}</a>
         ))}
       </nav>
-      <div className="sidebar-foot">오금현대<br/>김관리 · admin</div>
+      <div className="sidebar-foot">
+        <div>{scope}</div>
+        <div style={{ marginTop: 2 }}>
+          {(admin && (admin.name || admin.email)) || '—'} · {(admin && admin.role) || '—'}
+        </div>
+        {onLogout && (
+          <button
+            className="btn btn-ghost"
+            onClick={onLogout}
+            style={{ marginTop: 8, height: 28, fontSize: 12, padding: '0 10px' }}
+          >
+            로그아웃
+          </button>
+        )}
+      </div>
     </aside>
   );
 }
@@ -39,27 +54,75 @@ function Topbar({ title, onLogout }) {
 }
 
 // ─── Login page ─────────────────────────────────────────────────
-function AdminLogin({ go }) {
+function AdminLogin({ onLogin }) {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  const submit = async (e) => {
+    if (e) e.preventDefault();
+    if (!email.trim() || !password) { setErr('이메일과 비밀번호를 입력하세요'); return; }
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(json.error || '로그인 실패'); setBusy(false); return; }
+      localStorage.setItem('jp_admin_token', json.access_token);
+      localStorage.setItem('jp_admin_user', JSON.stringify(json.admin || {}));
+      onLogin && onLogin(json.admin);
+    } catch (_) {
+      setErr('네트워크 오류');
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="login-wrap">
-      <div className="login-card">
+      <form className="login-card" onSubmit={submit}>
         <div className="login-logo">자리픽</div>
         <div className="login-sub">관리자 콘솔에 로그인하세요</div>
         <div className="stack">
           <div>
-            <label className="label">아이디</label>
-            <input className="input" defaultValue="admin@heliocity" />
+            <label className="label">이메일</label>
+            <input
+              className="input"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="admin@example.com"
+              autoFocus
+            />
           </div>
           <div>
             <label className="label">비밀번호</label>
-            <input className="input" type="password" defaultValue="••••••••" />
+            <input
+              className="input"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
           </div>
-          <button className="btn btn-primary" style={{ width: '100%', height: 44, fontSize: 14 }} onClick={() => go('dashboard')}>로그인</button>
+          {err && <div style={{ color: 'var(--danger)', fontSize: 12 }}>{err}</div>}
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', height: 44, fontSize: 14 }}
+            type="submit"
+            disabled={busy}
+          >
+            {busy ? '로그인 중…' : '로그인'}
+          </button>
           <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--n400)', marginTop: 8 }}>
             관리자 계정은 본사에서 발급됩니다
           </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

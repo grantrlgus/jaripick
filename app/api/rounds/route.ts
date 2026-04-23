@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireAdmin, canWrite, canAccessComplex } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +25,12 @@ export async function GET(req: Request) {
 
 // POST create new round (sets status=live)
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const body = await req.json();
   const complex = body.complex || DEFAULT_COMPLEX;
+  if (!canAccessComplex(auth.admin, complex)) return NextResponse.json({ error: "단지 접근 권한 없음" }, { status: 403 });
   const name = String(body.name || "").trim();
   const bid_start = body.bid_start;
   const bid_end = body.bid_end;

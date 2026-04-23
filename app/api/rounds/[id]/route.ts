@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireAdmin, canWrite } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 // PATCH /api/rounds/:id  { status: 'closed' | 'finalized' }
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const body = await req.json();
   const status = body.status;
   if (!["live", "closed", "finalized"].includes(status)) {

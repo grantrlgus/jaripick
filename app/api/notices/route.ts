@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireAdmin, canWrite, canAccessComplex } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,12 @@ export async function GET(req: Request) {
 
 // POST { complex?, target, title, body } — logs the notice (demo: no actual push).
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const body = await req.json();
   const complex = body.complex || DEFAULT_COMPLEX;
+  if (!canAccessComplex(auth.admin, complex)) return NextResponse.json({ error: "단지 접근 권한 없음" }, { status: 403 });
   const target = body.target || "all";
   const title = String(body.title || "").trim();
   const content = String(body.body || "").trim();
@@ -50,6 +55,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireAdmin, canWrite } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const cells = await req.json();
   if (!Array.isArray(cells)) {
     return NextResponse.json({ error: "cells must be an array" }, { status: 400 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireAdmin, canAccessComplex, canWrite } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,12 @@ export async function GET(req: Request) {
 
 // Bulk replace: { complex, rows: [{ dong, ho, name, phone?, status? }] }
 export async function PUT(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const body = await req.json();
   const complex = body.complex || DEFAULT_COMPLEX;
+  if (!canAccessComplex(auth.admin, complex)) return NextResponse.json({ error: "단지 접근 권한 없음" }, { status: 403 });
   const rows = Array.isArray(body.rows) ? body.rows : null;
   if (!rows) return NextResponse.json({ error: "rows required" }, { status: 400 });
   const sb = createServiceClient();
@@ -70,7 +75,12 @@ async function rematchPending(sb: ReturnType<typeof createServiceClient>, comple
 }
 
 export async function POST(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const body = await req.json();
+  const complex = body.complex || DEFAULT_COMPLEX;
+  if (!canAccessComplex(auth.admin, complex)) return NextResponse.json({ error: "단지 접근 권한 없음" }, { status: 403 });
   if (!body.dong || !body.ho || !body.name) {
     return NextResponse.json({ error: "dong, ho, name required" }, { status: 400 });
   }
@@ -93,6 +103,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.res;
+  if (!canWrite(auth.admin)) return NextResponse.json({ error: "쓰기 권한 없음" }, { status: 403 });
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
