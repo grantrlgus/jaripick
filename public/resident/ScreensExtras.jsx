@@ -203,7 +203,7 @@ function SettingsScreen({ go }) {
           ))}
         </div>
 
-        <button onClick={() => {
+        <button onClick={async () => {
           if (!confirm('로그아웃 하시겠어요?')) return;
           try {
             localStorage.removeItem('jp_request_id');
@@ -213,6 +213,7 @@ function SettingsScreen({ go }) {
             localStorage.removeItem('jp_plate');
             localStorage.removeItem('jp_complex_name');
           } catch {}
+          try { await window.jp.auth.signOut(); } catch {}
           go('login');
         }} style={{
           height: 48, background: C.white, borderRadius: 12, border: 0,

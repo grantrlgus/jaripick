@@ -2,8 +2,22 @@
 
 function SplashScreen({ go }) {
   React.useEffect(() => {
-    const t = setTimeout(() => go('login'), 1400);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      let next = 'login';
+      try {
+        const session = await window.jp.auth.getSession();
+        if (session) {
+          let hasProfile = false;
+          try {
+            hasProfile = !!(localStorage.getItem('jp_dong') && localStorage.getItem('jp_ho'));
+          } catch {}
+          next = hasProfile ? 'home' : 'complex_register';
+        }
+      } catch {}
+      if (!cancelled) go(next);
+    }, 1200);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
   return (
     <JPScreen bg={C.primary} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

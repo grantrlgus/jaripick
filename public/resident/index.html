@@ -46,6 +46,10 @@
 </style>
 <!-- Preload Naver Maps SDK so map is ready before user opens 구역 -->
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=qxze9eualp" async data-naver-maps></script>
+
+<!-- Supabase Auth (Kakao OAuth) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="/api/public/config"></script>
 <script>
   (function(){
     var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -87,6 +91,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script type="text/babel" src="/resident/ios-frame.jsx"></script>
+<script type="text/babel" src="/resident/jp-auth.jsx"></script>
 <script type="text/babel" src="/resident/Primitives.jsx"></script>
 <script type="text/babel" src="/resident/ScreensA.jsx"></script>
 <script type="text/babel" src="/resident/ScreensB.jsx"></script>
