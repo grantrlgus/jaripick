@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 const DEFAULT_COMPLEX = "heliocity";
 
+// Bearer 토큰이 있으면 auth.users id 를 추출 (없어도 OK — 익명 신청 호환).
+async function resolveAuthUserId(req: Request): Promise<string | null> {
+  const header = req.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) return null;
+  const c = createClient(url, anon, { auth: { persistSession: false } });
+  const { data } = await c.auth.getUser(token);
+  return data.user?.id ?? null;
+}
+
 // Input: { complex?, dong, ho, name, phone?, car_plate?, car_size?, ev? }
 // Persists to resident_requests. Auto-approves if household roster matches.
+// Bearer 가 있으면 auth_user_id 를 함께 저장 → 이후 /api/bids 등에서 신원 확인.
 export async function POST(req: Request) {
+  const authUserId = await resolveAuthUserId(req);
   const body = await req.json();
   const complex = body.complex || DEFAULT_COMPLEX;
   const dong = String(body.dong || "").trim();
@@ -56,6 +73,7 @@ export async function POST(req: Request) {
       reason,
       status,
       auto,
+      auth_user_id: authUserId,
       decided_at: status === "approved" ? new Date().toISOString() : null,
     })
     .select()

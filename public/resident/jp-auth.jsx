@@ -97,7 +97,17 @@ window.jp.api = {
     const sep = url.includes('?') ? '&' : '?';
     return `${url}${sep}complex=${encodeURIComponent(c)}`;
   },
-  fetch(url, opts) {
+  async fetch(url, opts) {
+    opts = opts || {};
+    // Supabase 세션이 있으면 Authorization: Bearer 자동 부착.
+    try {
+      const session = await window.jp.auth.getSession();
+      if (session && session.access_token) {
+        const h = new Headers(opts.headers || {});
+        if (!h.has('Authorization')) h.set('Authorization', 'Bearer ' + session.access_token);
+        opts.headers = h;
+      }
+    } catch (_) { /* 세션 조회 실패 시 그냥 진행 */ }
     return fetch(this.withComplex(url), opts);
   },
 };

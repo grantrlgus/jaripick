@@ -141,6 +141,7 @@ export type Database = {
           reason: string | null;
           status: string;
           auto: boolean;
+          auth_user_id: string | null;
           created_at: string;
           decided_at: string | null;
         };
@@ -157,6 +158,7 @@ export type Database = {
           reason?: string | null;
           status?: string;
           auto?: boolean;
+          auth_user_id?: string | null;
           created_at?: string;
           decided_at?: string | null;
         };
@@ -169,6 +171,7 @@ export type Database = {
           car_size: string | null;
           ev: boolean;
           auto: boolean;
+          auth_user_id: string | null;
         }>;
         Relationships: [];
       };

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { requireResident } from "@/lib/resident-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,12 @@ export async function GET(req: Request) {
 }
 
 // POST new bid — enforces "strictly higher than current top" per cell.
-// Body: { round_id, cell_id, dong, ho, name, amount }
+// Body: { round_id, cell_id, amount, replace? }
+// dong/ho/name 은 세션에서 검증된 입주민 정보로 강제 (클라이언트 위조 차단).
 export async function POST(req: Request) {
   const body = await req.json();
-  const { round_id, cell_id, dong, ho, name, amount, replace } = body;
-  if (!round_id || !cell_id || !dong || !ho || !name || !amount) {
+  const { round_id, cell_id, amount, replace } = body;
+  if (!round_id || !cell_id || !amount) {
     return NextResponse.json({ error: "필수 필드 누락" }, { status: 400 });
   }
   const amt = Number(amount);
@@ -31,6 +33,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "금액이 올바르지 않아요" }, { status: 400 });
   }
   const sb = createServiceClient();
+
+  // 라운드의 단지 → 입주민 매칭 (해당 단지 승인된 행만 인정).
+  const { data: roundComplex } = await sb
+    .from("rounds")
+    .select("complex")
+    .eq("id", round_id)
+    .maybeSingle();
+  const auth = await requireResident(req, roundComplex?.complex ?? null);
+  if (!auth.ok) return auth.res;
+  const { dong, ho, name } = auth.resident;
 
   // Check round is live AND inside bid window
   const { data: round } = await sb
@@ -105,23 +117,27 @@ export async function POST(req: Request) {
 }
 
 // DELETE — cancel all of a household's bids on a cell in a live round.
-// Body: { round_id, cell_id, dong, ho }
+// Body: { round_id, cell_id }
+// dong/ho 는 세션에서 검증.
 export async function DELETE(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const { round_id, cell_id, dong, ho } = body || {};
-  if (!round_id || !cell_id || !dong || !ho) {
+  const { round_id, cell_id } = body || {};
+  if (!round_id || !cell_id) {
     return NextResponse.json({ error: "필수 필드 누락" }, { status: 400 });
   }
   const sb = createServiceClient();
   const { data: round } = await sb
     .from("rounds")
-    .select("status")
+    .select("status, complex")
     .eq("id", round_id)
     .maybeSingle();
   if (!round) return NextResponse.json({ error: "라운드를 찾을 수 없어요" }, { status: 404 });
   if (round.status !== "live") {
     return NextResponse.json({ error: "진행 중인 라운드만 취소할 수 있어요" }, { status: 400 });
   }
+  const auth = await requireResident(req, round.complex);
+  if (!auth.ok) return auth.res;
+  const { dong, ho } = auth.resident;
   const { error } = await sb
     .from("bids")
     .delete()
