@@ -231,6 +231,9 @@ function SettingsScreen({ go }) {
             localStorage.removeItem('jp_name');
             localStorage.removeItem('jp_plate');
             localStorage.removeItem('jp_complex_name');
+            localStorage.removeItem('jp_complex_slug');
+            localStorage.removeItem('jp_phone_verified');
+            localStorage.removeItem('jp_phone');
           } catch {}
           try { await window.jp.auth.signOut(); } catch {}
           go('login');

@@ -18,11 +18,14 @@ function LoginScreen({ go }) {
       if (!session) return;
       // Clean the OAuth hash/query params from the URL.
       try { history.replaceState(null, '', window.location.pathname); } catch {}
-      let hasProfile = false;
+      let hasProfile = false, phoneVerified = false;
       try {
         hasProfile = !!(localStorage.getItem('jp_dong') && localStorage.getItem('jp_ho'));
+        phoneVerified = localStorage.getItem('jp_phone_verified') === '1';
       } catch {}
-      go(hasProfile ? 'home' : 'complex_register');
+      if (hasProfile) go('home');
+      else if (!phoneVerified) go('phone_auth');
+      else go('complex_register');
     })();
     return () => { cancelled = true; };
   }, []);

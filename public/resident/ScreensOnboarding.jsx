@@ -8,11 +8,14 @@ function SplashScreen({ go }) {
       try {
         const session = await window.jp.auth.getSession();
         if (session) {
-          let hasProfile = false;
+          let hasProfile = false, phoneVerified = false;
           try {
             hasProfile = !!(localStorage.getItem('jp_dong') && localStorage.getItem('jp_ho'));
+            phoneVerified = localStorage.getItem('jp_phone_verified') === '1';
           } catch {}
-          next = hasProfile ? 'home' : 'complex_register';
+          if (hasProfile) next = 'home';
+          else if (!phoneVerified) next = 'phone_auth';
+          else next = 'complex_register';
         }
       } catch {}
       if (!cancelled) go(next);
@@ -92,7 +95,13 @@ function PhoneAuthScreen({ go }) {
           <JPPrimaryButton label="인증번호 받기" onClick={() => setStep(2)} />
         ) : (
           <JPPrimaryButton label="확인" disabled={code.length !== 6}
-            onClick={() => go('complex_register')} />
+            onClick={() => {
+              try {
+                localStorage.setItem('jp_phone_verified', '1');
+                localStorage.setItem('jp_phone', phone);
+              } catch {}
+              go('complex_register');
+            }} />
         )}
       </div>
     </JPScreen>
