@@ -143,6 +143,15 @@ function NotificationsScreen({ go }) {
 }
 
 function SettingsScreen({ go }) {
+  const [authUser, setAuthUser] = React.useState(null);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const u = await window.jp.auth.getUser();
+        if (u) setAuthUser(u);
+      } catch {}
+    })();
+  }, []);
   const profile = (() => {
     try {
       return {
@@ -155,8 +164,13 @@ function SettingsScreen({ go }) {
     } catch { return { name: '', dong: '', ho: '', plate: '', complexName: '오금현대' }; }
   })();
   const dongHo = profile.dong && profile.ho ? `${profile.dong}동 ${profile.ho}호` : '';
+  const oauthName = authUser?.user_metadata?.full_name || authUser?.user_metadata?.name || '';
+  const oauthEmail = authUser?.email || '';
+  const oauthAvatar = authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || '';
+  const displayName = profile.name || oauthName || oauthEmail || '—';
+  const profileSub = [profile.name || oauthName, dongHo, !profile.name && oauthEmail].filter(Boolean).join(' · ') || '—';
   const rows = [
-    { e: '👤', l: '프로필', s: [profile.name, dongHo].filter(Boolean).join(' · ') || '—', to: null },
+    { e: '👤', l: '프로필', s: profileSub, to: null },
     { e: '🚗', l: '차량 정보', s: profile.plate || '등록된 차량 없음', to: 'vehicle' },
     { e: '🔔', l: '알림 설정', s: '입찰, 라운드, 공지', to: null },
     { e: '💳', l: '결제 수단', s: '관리비 합산', to: null },
@@ -178,10 +192,15 @@ function SettingsScreen({ go }) {
           boxShadow: '0 1px 4px rgba(0,0,0,.06)',
           display: 'flex', alignItems: 'center', gap: 14,
         }}>
-          <div style={{ width: 56, height: 56, borderRadius: 28, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧑</div>
+          {oauthAvatar ? (
+            <img src={oauthAvatar} alt="" style={{ width: 56, height: 56, borderRadius: 28, objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: 56, height: 56, borderRadius: 28, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧑</div>
+          )}
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{profile.name || '—'}</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{displayName}</div>
             <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{profile.complexName}{dongHo ? ` · ${dongHo}` : ''}</div>
+            {oauthEmail && <div style={{ fontSize: 11, color: C.n400, marginTop: 2 }}>{oauthEmail}</div>}
           </div>
         </div>
 
