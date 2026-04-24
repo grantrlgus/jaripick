@@ -106,6 +106,7 @@ function ComplexRegisterScreen({ go }) {
   const [selected, setSelected] = React.useState('heliocity');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [query, setQuery] = React.useState('');
 
   const submit = async () => {
     setSubmitting(true);
@@ -158,11 +159,26 @@ function ComplexRegisterScreen({ go }) {
 
         <div style={{
           height: 46, background: C.n100, borderRadius: 12, display: 'flex', alignItems: 'center',
-          padding: '0 14px', gap: 8, color: C.n500, fontSize: 14,
-        }}>🔍 단지명으로 검색</div>
+          padding: '0 14px', gap: 8,
+        }}>
+          <span style={{ fontSize: 14, color: C.n500 }}>🔍</span>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="단지명으로 검색"
+            style={{
+              flex: 1, height: '100%', border: 0, background: 'transparent',
+              outline: 'none', fontSize: 14, color: C.n900, fontFamily: jpFont,
+            }}
+          />
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {complexes.map(c => {
+          {complexes.filter(c => {
+            const q = query.trim().toLowerCase();
+            if (!q) return true;
+            return c.n.toLowerCase().includes(q) || c.a.toLowerCase().includes(q);
+          }).map(c => {
             const active = selected === c.k;
             return (
               <div key={c.k} onClick={() => setSelected(c.k)} style={{
