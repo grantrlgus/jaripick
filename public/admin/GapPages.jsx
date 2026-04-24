@@ -690,45 +690,184 @@ function PaymentsPage() {
 }
 
 // ─── AG6: Admin Users / Permissions ─────────────────────────────
-function AdminUsersPage() {
-  const rows = [
-    { name: '김관리', email: 'admin@heliocity', role: '최고 관리자', last: '방금 전', me: true },
-    { name: '이부관리', email: 'lee@heliocity', role: '입찰 관리자', last: '2시간 전', me: false },
-    { name: '박운영', email: 'park@heliocity', role: '입주민 담당', last: '어제', me: false },
-    { name: '최회계', email: 'choi@heliocity', role: '정산 담당', last: '3일 전', me: false },
-  ];
+const ROLE_LABEL = { super: '슈퍼관리자', admin: '단지관리자', viewer: '읽기전용' };
+
+function AdminUsersPage({ admin }) {
+  const isSuper = admin && admin.role === 'super';
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showInvite, setShowInvite] = React.useState(false);
+  const [form, setForm] = React.useState({ email: '', name: '', role: 'admin', complex: '' });
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const reload = React.useCallback(() => {
+    setLoading(true);
+    fetch('/api/admin/users', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then(setRows)
+      .finally(() => setLoading(false));
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const body = {
+        email: form.email.trim(),
+        name: form.name.trim(),
+        role: form.role,
+        complex: form.role === 'super' ? null : form.complex.trim(),
+      };
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        window.jpToast('관리자가 추가되었습니다', 'ok');
+        setShowInvite(false);
+        setForm({ email: '', name: '', role: 'admin', complex: '' });
+        reload();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const updateRole = async (id, role) => {
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+    if (res.ok) { window.jpToast('역할이 변경되었습니다', 'ok'); reload(); }
+  };
+
+  const updateComplex = async (id, complex) => {
+    const res = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ complex: complex || null }),
+    });
+    if (res.ok) { window.jpToast('단지가 변경되었습니다', 'ok'); reload(); }
+  };
+
+  const remove = async (id, name) => {
+    if (!window.confirm(`${name} 관리자를 삭제하시겠습니까?`)) return;
+    const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    if (res.ok) { window.jpToast('삭제되었습니다', 'ok'); reload(); }
+  };
+
   return (
     <div>
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
           <h1 className="title" style={{ marginBottom: 2 }}>관리자 계정 / 권한</h1>
-          <p className="subtitle" style={{ marginBottom: 0 }}>함께 운영하는 관리자를 초대하고 권한을 설정합니다.</p>
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            {isSuper ? '단지별 관리자를 초대하고 권한을 설정합니다.' : '같은 단지의 관리자 목록입니다.'}
+          </p>
         </div>
-        <button className="btn btn-primary">+ 관리자 초대</button>
+        {isSuper && (
+          <button className="btn btn-primary" onClick={() => setShowInvite(true)}>+ 관리자 초대</button>
+        )}
       </div>
 
+      {showInvite && isSuper && (
+        <div className="card" style={{ marginBottom: 16, padding: 16 }}>
+          <form onSubmit={submit}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>새 관리자 초대</div>
+            <div style={{ fontSize: 12, color: 'var(--n400)', marginBottom: 12 }}>
+              ⚠️ 초대 대상자는 먼저 이 콘솔에 1회 로그인하여 Supabase 계정을 만들어야 합니다.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <label>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>이메일</div>
+                <input className="input" type="email" required value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </label>
+              <label>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>이름</div>
+                <input className="input" required value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </label>
+              <label>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>역할</div>
+                <select className="input" value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <option value="admin">단지관리자</option>
+                  <option value="viewer">읽기전용</option>
+                  <option value="super">슈퍼관리자</option>
+                </select>
+              </label>
+              <label>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>단지 slug {form.role === 'super' && '(슈퍼는 비워두세요)'}</div>
+                <input className="input" placeholder="heliocity" value={form.complex}
+                  disabled={form.role === 'super'}
+                  onChange={(e) => setForm({ ...form, complex: e.target.value })} />
+              </label>
+            </div>
+            <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowInvite(false)}>취소</button>
+              <button type="submit" className="btn btn-primary" disabled={submitting}>
+                {submitting ? '추가 중…' : '초대'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       <div className="card" style={{ padding: 0, marginBottom: 16 }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>관리자 ({rows.length})</div>
-        <table className="table">
-          <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>마지막 접속</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{r.name} {r.me && <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)', marginLeft: 6 }}>나</span>}</td>
-                <td className="muted">{r.email}</td>
-                <td>
-                  <select className="input" defaultValue={r.role} style={{ height: 32, width: 160, fontSize: 13 }}>
-                    <option>최고 관리자</option><option>입찰 관리자</option><option>입주민 담당</option><option>정산 담당</option>
-                  </select>
-                </td>
-                <td className="muted">{r.last}</td>
-                <td style={{ textAlign: 'right' }}>
-                  {!r.me && <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px', color: 'var(--danger)' }}>삭제</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--n100)', fontSize: 14, fontWeight: 700 }}>
+          관리자 ({rows.length})
+        </div>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--n400)' }}>불러오는 중…</div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--n400)' }}>아직 관리자가 없습니다.</div>
+        ) : (
+          <table className="table">
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>단지</th><th>등록일</th><th></th></tr></thead>
+            <tbody>
+              {rows.map((r) => {
+                const me = admin && r.id === admin.id;
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 600 }}>
+                      {r.name}
+                      {me && <span className="badge" style={{ background: 'var(--primary-light)', color: 'var(--primary)', marginLeft: 6 }}>나</span>}
+                    </td>
+                    <td className="muted">{r.email}</td>
+                    <td>
+                      {isSuper && !me ? (
+                        <select className="input" value={r.role} style={{ height: 32, width: 140, fontSize: 13 }}
+                          onChange={(e) => updateRole(r.id, e.target.value)}>
+                          <option value="super">슈퍼관리자</option>
+                          <option value="admin">단지관리자</option>
+                          <option value="viewer">읽기전용</option>
+                        </select>
+                      ) : (ROLE_LABEL[r.role] || r.role)}
+                    </td>
+                    <td>
+                      {isSuper && !me ? (
+                        <input className="input" defaultValue={r.complex || ''} style={{ height: 32, width: 140, fontSize: 13 }}
+                          onBlur={(e) => { if (e.target.value !== (r.complex || '')) updateComplex(r.id, e.target.value); }} />
+                      ) : (r.complex || '—')}
+                    </td>
+                    <td className="muted">{r.created_at ? r.created_at.slice(0, 10) : ''}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {isSuper && !me && (
+                        <button className="btn btn-ghost" style={{ height: 28, fontSize: 12, padding: '0 10px', color: 'var(--danger)' }}
+                          onClick={() => remove(r.id, r.name)}>삭제</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card">
@@ -737,20 +876,17 @@ function AdminUsersPage() {
           <thead>
             <tr>
               <th>권한</th>
-              <th style={{ textAlign: 'center' }}>최고 관리자</th>
-              <th style={{ textAlign: 'center' }}>입찰 관리자</th>
-              <th style={{ textAlign: 'center' }}>입주민 담당</th>
-              <th style={{ textAlign: 'center' }}>정산 담당</th>
+              <th style={{ textAlign: 'center' }}>슈퍼관리자</th>
+              <th style={{ textAlign: 'center' }}>단지관리자</th>
+              <th style={{ textAlign: 'center' }}>읽기전용</th>
             </tr>
           </thead>
           <tbody>
             {[
-              ['도면 편집 · 입찰 구역 지정', 'y','n','n','n'],
-              ['라운드 생성/확정', 'y','y','n','n'],
-              ['입주민 승인 (수동)', 'y','n','y','n'],
-              ['정산 조회/처리', 'y','n','n','y'],
-              ['공지 발송', 'y','y','y','n'],
-              ['관리자 관리', 'y','n','n','n'],
+              ['모든 단지 접근', 'y','n','n'],
+              ['관리자 초대/삭제', 'y','n','n'],
+              ['도면/라운드/공지 등 단지 운영 쓰기', 'y','y','n'],
+              ['데이터 조회', 'y','y','y'],
             ].map(([perm, ...roles], i) => (
               <tr key={i}>
                 <td style={{ fontWeight: 600 }}>{perm}</td>
