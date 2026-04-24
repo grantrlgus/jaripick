@@ -38,8 +38,76 @@ function SplashScreen({ go }) {
 
 function PhoneAuthScreen({ go }) {
   const [step, setStep] = React.useState(1);
-  const [phone, setPhone] = React.useState('010-1234-5678');
+  const [phone, setPhone] = React.useState('');
   const [code, setCode] = React.useState('');
+  const [sending, setSending] = React.useState(false);
+  const [verifying, setVerifying] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [remainSec, setRemainSec] = React.useState(0);
+
+  // Countdown
+  React.useEffect(() => {
+    if (remainSec <= 0) return;
+    const t = setTimeout(() => setRemainSec(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [remainSec]);
+
+  const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const sendCode = async () => {
+    if (sending) return;
+    setError(null);
+    const digits = phone.replace(/\D/g, '');
+    if (!/^010\d{7,8}$/.test(digits)) {
+      setError('010으로 시작하는 휴대폰 번호를 입력해주세요');
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch('/api/sms/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || '전송에 실패했어요');
+        return;
+      }
+      setStep(2);
+      setRemainSec(json.ttl || 180);
+      setCode('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (verifying || code.length !== 6) return;
+    setError(null);
+    setVerifying(true);
+    try {
+      const digits = phone.replace(/\D/g, '');
+      const res = await fetch('/api/sms/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: digits, code }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || '확인에 실패했어요');
+        return;
+      }
+      try {
+        localStorage.setItem('jp_phone_verified', '1');
+        localStorage.setItem('jp_phone', digits);
+      } catch {}
+      go('complex_register');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   return (
     <JPScreen bg={C.white}>
       <div style={{ padding: '64px 20px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -55,7 +123,8 @@ function PhoneAuthScreen({ go }) {
 
         <div>
           <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>휴대폰 번호</div>
-          <input value={phone} onChange={e => setPhone(e.target.value)}
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="010-1234-5678"
+            inputMode="tel"
             style={{
               width: '100%', height: 52, border: `1.5px solid ${C.n200}`, borderRadius: 12,
               padding: '0 14px', fontSize: 16, fontFamily: jpFont, outline: 'none',
@@ -67,41 +136,43 @@ function PhoneAuthScreen({ go }) {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={{ fontSize: 12, color: C.n500 }}>인증번호 6자리</div>
-              <div style={{ fontSize: 12, color: C.primary, fontWeight: 600 }}>2:58</div>
+              <div style={{ fontSize: 12, color: remainSec > 0 ? C.primary : C.danger, fontWeight: 600 }}>
+                {remainSec > 0 ? fmtTime(remainSec) : '만료'}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
+                placeholder="000000" inputMode="numeric"
                 style={{
                   flex: 1, height: 52, border: `1.5px solid ${C.primary}`, borderRadius: 12,
                   padding: '0 14px', fontSize: 20, fontWeight: 700, fontFamily: jpFont, outline: 'none',
                   letterSpacing: 4, textAlign: 'center',
                 }} />
-              <button style={{
+              <button onClick={sendCode} disabled={sending} style={{
                 width: 84, height: 52, borderRadius: 12, border: `1.5px solid ${C.n200}`,
                 background: C.white, color: C.n700, fontSize: 13, fontWeight: 600, fontFamily: jpFont,
-                cursor: 'pointer',
-              }}>재전송</button>
+                cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.5 : 1,
+              }}>{sending ? '...' : '재전송'}</button>
             </div>
             <div style={{ fontSize: 12, color: C.n400, marginTop: 8 }}>
-              인증번호가 문자로 전송됐어요
+              {sending ? '인증번호 전송 중…' : '인증번호가 문자로 전송됐어요'}
             </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ fontSize: 13, color: C.danger, padding: '8px 12px', background: '#fef2f2', borderRadius: 8 }}>
+            {error}
           </div>
         )}
       </div>
 
       <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
         {step === 1 ? (
-          <JPPrimaryButton label="인증번호 받기" onClick={() => setStep(2)} />
+          <JPPrimaryButton label={sending ? '전송 중…' : '인증번호 받기'} disabled={sending} onClick={sendCode} />
         ) : (
-          <JPPrimaryButton label="확인" disabled={code.length !== 6}
-            onClick={() => {
-              try {
-                localStorage.setItem('jp_phone_verified', '1');
-                localStorage.setItem('jp_phone', phone);
-              } catch {}
-              go('complex_register');
-            }} />
+          <JPPrimaryButton label={verifying ? '확인 중…' : '확인'} disabled={code.length !== 6 || verifying || remainSec === 0}
+            onClick={verifyCode} />
         )}
       </div>
     </JPScreen>

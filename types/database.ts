@@ -345,6 +345,31 @@ export type Database = {
         }>;
         Relationships: [];
       };
+      sms_otps: {
+        Row: {
+          id: string;
+          phone: string;
+          code: string;
+          expires_at: string;
+          attempts: number;
+          used: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          phone: string;
+          code: string;
+          expires_at: string;
+          attempts?: number;
+          used?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<{
+          attempts: number;
+          used: boolean;
+        }>;
+        Relationships: [];
+      };
       complaints: {
         Row: {
           id: string;
