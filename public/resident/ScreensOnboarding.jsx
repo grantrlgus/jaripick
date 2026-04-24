@@ -100,22 +100,51 @@ function PhoneAuthScreen({ go }) {
 }
 
 function ComplexRegisterScreen({ go }) {
-  const [dong, setDong] = React.useState('101');
-  const [ho, setHo] = React.useState('1201');
+  const [dong, setDong] = React.useState('');
+  const [ho, setHo] = React.useState('');
   const [name, setName] = React.useState('');
-  const [selected, setSelected] = React.useState('heliocity');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [query, setQuery] = React.useState('');
+  const [results, setResults] = React.useState([]);
+  const [searching, setSearching] = React.useState(false);
+  const [picked, setPicked] = React.useState(null); // { slug, name, address }
+  const searchInputRef = React.useRef(null);
+
+  // Auto-focus search on mount so user knows to type
+  React.useEffect(() => {
+    if (!picked) {
+      const t = setTimeout(() => { try { searchInputRef.current?.focus(); } catch {} }, 150);
+      return () => clearTimeout(t);
+    }
+  }, [picked]);
+
+  // Debounced search against /api/apartments/search
+  React.useEffect(() => {
+    if (picked) return;
+    const q = query.trim();
+    if (!q) { setResults([]); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/apartments/search?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+        const d = r.ok ? await r.json() : [];
+        setResults(Array.isArray(d) ? d : []);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query, picked]);
 
   const submit = async () => {
+    if (!picked) return;
     setSubmitting(true);
     setError(null);
     try {
       const r = await fetch('/api/residents/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ complex: selected, dong, ho, name }),
+        body: JSON.stringify({ complex: picked.slug, dong, ho, name }),
       });
       const d = await r.json().catch(() => ({}));
       if (d.request_id) {
@@ -124,8 +153,8 @@ function ComplexRegisterScreen({ go }) {
           localStorage.setItem('jp_dong', dong);
           localStorage.setItem('jp_ho', ho);
           localStorage.setItem('jp_name', name);
-          const cx = complexes.find(c => c.k === selected);
-          if (cx) localStorage.setItem('jp_complex_name', cx.n);
+          localStorage.setItem('jp_complex_name', picked.name);
+          localStorage.setItem('jp_complex_slug', picked.slug);
         } catch {}
       }
       if (d.status === 'approved') {
@@ -139,15 +168,11 @@ function ComplexRegisterScreen({ go }) {
       setSubmitting(false);
     }
   };
-  const complexes = [
-    { k: 'heliocity', n: '오금현대', a: '서울 송파구 올림픽로 300', status: '활성' },
-    { k: 'raemian',  n: '래미안 위례',  a: '서울 송파구 위례광장로 200', status: '활성' },
-    { k: 'trapalace', n: '트라팰리스',  a: '서울 강남구 테헤란로 520', status: '활성' },
-  ];
+
   return (
     <JPScreen bg={C.white}>
       <div style={{ padding: '64px 20px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <button onClick={() => go('login')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, alignSelf: 'flex-start', cursor: 'pointer', color: C.n700 }}>‹</button>
+        <button onClick={() => picked ? setPicked(null) : go('login')} style={{ background: 'transparent', border: 0, fontSize: 22, padding: 0, alignSelf: 'flex-start', cursor: 'pointer', color: C.n700 }}>‹</button>
         <div>
           <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.25 }}>
             거주 중인 단지를<br/>알려주세요
@@ -157,75 +182,108 @@ function ComplexRegisterScreen({ go }) {
           </div>
         </div>
 
-        <div style={{
-          height: 46, background: C.n100, borderRadius: 12, display: 'flex', alignItems: 'center',
-          padding: '0 14px', gap: 8,
-        }}>
-          <span style={{ fontSize: 14, color: C.n500 }}>🔍</span>
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="단지명으로 검색"
-            style={{
-              flex: 1, height: '100%', border: 0, background: 'transparent',
-              outline: 'none', fontSize: 14, color: C.n900, fontFamily: jpFont,
-            }}
-          />
-        </div>
+        {!picked && (
+          <>
+            <div style={{
+              height: 46, background: C.n100, borderRadius: 12, display: 'flex', alignItems: 'center',
+              padding: '0 14px', gap: 8,
+            }}>
+              <span style={{ fontSize: 14, color: C.n500 }}>🔍</span>
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="아파트 이름을 입력하세요"
+                style={{
+                  flex: 1, height: '100%', border: 0, background: 'transparent',
+                  outline: 'none', fontSize: 14, color: C.n900, fontFamily: jpFont,
+                }}
+              />
+              {query && (
+                <button onClick={() => setQuery('')} style={{
+                  background: 'transparent', border: 0, fontSize: 16, color: C.n400, cursor: 'pointer', padding: 0,
+                }}>✕</button>
+              )}
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {complexes.filter(c => {
-            const q = query.trim().toLowerCase();
-            if (!q) return true;
-            return c.n.toLowerCase().includes(q) || c.a.toLowerCase().includes(q);
-          }).map(c => {
-            const active = selected === c.k;
-            return (
-              <div key={c.k} onClick={() => setSelected(c.k)} style={{
-                background: active ? C.primaryLight : C.white,
-                border: `1.5px solid ${active ? C.primary : C.n200}`,
-                borderRadius: 12, padding: 14, cursor: 'pointer',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: active ? C.primary : C.n900 }}>{c.n}</div>
-                  <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{c.a}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 200 }}>
+              {!query.trim() && (
+                <div style={{ padding: '32px 12px', textAlign: 'center', color: C.n400, fontSize: 13 }}>
+                  아파트 이름을 검색해주세요<br/>
+                  <span style={{ fontSize: 11, color: C.n400 }}>예: 오금현대, 래미안, 헬리오시티</span>
                 </div>
-                {active && <span style={{ color: C.primary, fontSize: 18, fontWeight: 700 }}>✓</span>}
+              )}
+              {query.trim() && searching && (
+                <div style={{ padding: '24px 12px', textAlign: 'center', color: C.n400, fontSize: 13 }}>검색 중…</div>
+              )}
+              {query.trim() && !searching && results.length === 0 && (
+                <div style={{ padding: '24px 12px', textAlign: 'center', color: C.n400, fontSize: 13 }}>검색 결과가 없어요</div>
+              )}
+              {!searching && results.map(c => (
+                <div key={c.slug} onClick={() => setPicked(c)} style={{
+                  background: C.white,
+                  border: `1.5px solid ${C.n200}`,
+                  borderRadius: 12, padding: 14, cursor: 'pointer',
+                }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.n900 }}>{c.name}</div>
+                  <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{c.address}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {picked && (
+          <>
+            <div style={{
+              background: C.primaryLight,
+              border: `1.5px solid ${C.primary}`,
+              borderRadius: 12, padding: 14,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{picked.name}</div>
+                <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{picked.address}</div>
               </div>
-            );
-          })}
-        </div>
+              <button onClick={() => setPicked(null)} style={{
+                background: 'transparent', border: 0, fontSize: 12, color: C.primary,
+                cursor: 'pointer', fontWeight: 600, padding: 0,
+              }}>변경</button>
+            </div>
 
-        <div style={{ height: 1, background: C.n100, margin: '4px 0' }} />
+            <div style={{ height: 1, background: C.n100, margin: '4px 0' }} />
 
-        <div>
-          <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>동 / 호수</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={dong} onChange={e => setDong(e.target.value)} placeholder="동"
-              style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
-            <input value={ho} onChange={e => setHo(e.target.value)} placeholder="호"
-              style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
-          </div>
-        </div>
+            <div>
+              <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>동 / 호수</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={dong} onChange={e => setDong(e.target.value)} placeholder="동"
+                  style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
+                <input value={ho} onChange={e => setHo(e.target.value)} placeholder="호"
+                  style={{ flex: 1, height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none' }} />
+              </div>
+            </div>
 
-        <div>
-          <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>이름</div>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="세대주 이름"
-            style={{ width: '100%', height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none', boxSizing: 'border-box' }} />
-          <div style={{ fontSize: 11, color: C.n400, marginTop: 6 }}>
-            관리자가 등록한 명단과 일치하면 즉시 승인돼요
-          </div>
-        </div>
+            <div>
+              <div style={{ fontSize: 12, color: C.n500, marginBottom: 6 }}>이름</div>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="세대주 이름"
+                style={{ width: '100%', height: 48, border: `1.5px solid ${C.n200}`, borderRadius: 12, padding: '0 14px', fontSize: 15, fontFamily: jpFont, outline: 'none', boxSizing: 'border-box' }} />
+              <div style={{ fontSize: 11, color: C.n400, marginTop: 6 }}>
+                관리자가 등록한 명단과 일치하면 즉시 승인돼요
+              </div>
+            </div>
 
-        {error && (
-          <div style={{ padding: '10px 12px', background: C.warningLight || '#FEF3C7', color: '#92400E', borderRadius: 8, fontSize: 12 }}>{error}</div>
+            {error && (
+              <div style={{ padding: '10px 12px', background: C.warningLight || '#FEF3C7', color: '#92400E', borderRadius: 8, fontSize: 12 }}>{error}</div>
+            )}
+          </>
         )}
       </div>
 
-      <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
-        <JPPrimaryButton label={submitting ? '확인 중…' : '승인 요청하기'} disabled={!dong || !ho || !name || submitting} onClick={submit} />
-      </div>
+      {picked && (
+        <div style={{ position: 'absolute', bottom: 32, left: 20, right: 20 }}>
+          <JPPrimaryButton label={submitting ? '확인 중…' : '승인 요청하기'} disabled={!dong || !ho || !name || submitting} onClick={submit} />
+        </div>
+      )}
     </JPScreen>
   );
 }
