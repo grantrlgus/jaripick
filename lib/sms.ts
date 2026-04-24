@@ -19,6 +19,13 @@ function buildAuthHeader(apiKey: string, apiSecret: string): string {
   return `HMAC-SHA256 apiKey=${apiKey}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
+// E.164 (+821076519051) / 하이픈 포함 → KR 국내 형식 (01076519051)
+function normalizeKrPhone(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (digits.startsWith("82")) return "0" + digits.slice(2);
+  return digits;
+}
+
 export type SmsResult = { ok: true } | { ok: false; error: string };
 
 export async function sendSms(to: string, text: string): Promise<SmsResult> {
@@ -41,7 +48,7 @@ export async function sendSms(to: string, text: string): Promise<SmsResult> {
         Authorization: buildAuthHeader(apiKey, apiSecret),
       },
       body: JSON.stringify({
-        message: { to: to.replace(/-/g, ""), from: from.replace(/-/g, ""), text },
+        message: { to: normalizeKrPhone(to), from: normalizeKrPhone(from), text },
       }),
     });
     if (!res.ok) {
