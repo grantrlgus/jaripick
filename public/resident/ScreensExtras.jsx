@@ -164,11 +164,18 @@ function SettingsScreen({ go }) {
     } catch { return { name: '', dong: '', ho: '', plate: '', complexName: '오금현대' }; }
   })();
   const dongHo = profile.dong && profile.ho ? `${profile.dong}동 ${profile.ho}호` : '';
-  const oauthName = authUser?.user_metadata?.full_name || authUser?.user_metadata?.name || '';
-  const oauthEmail = authUser?.email || '';
-  const oauthAvatar = authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || '';
-  const displayName = profile.name || oauthName || oauthEmail || '—';
-  const profileSub = [profile.name || oauthName, dongHo, !profile.name && oauthEmail].filter(Boolean).join(' · ') || '—';
+  // E.164 (+82...) → 010-... 표시용
+  const fmtPhone = (e164) => {
+    if (!e164) return '';
+    const d = String(e164).replace(/\D/g, '');
+    const local = d.startsWith('82') ? '0' + d.slice(2) : d;
+    if (local.length === 11) return `${local.slice(0, 3)}-${local.slice(3, 7)}-${local.slice(7)}`;
+    if (local.length === 10) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
+    return local;
+  };
+  const phone = fmtPhone(authUser?.phone || (typeof localStorage !== 'undefined' ? localStorage.getItem('jp_phone') : '') || '');
+  const displayName = profile.name || phone || '—';
+  const profileSub = [profile.name && phone, dongHo].filter(Boolean).join(' · ') || phone || '—';
   const rows = [
     { e: '👤', l: '프로필', s: profileSub, to: null },
     { e: '🚗', l: '차량 정보', s: profile.plate || '등록된 차량 없음', to: 'vehicle' },
@@ -192,15 +199,11 @@ function SettingsScreen({ go }) {
           boxShadow: '0 1px 4px rgba(0,0,0,.06)',
           display: 'flex', alignItems: 'center', gap: 14,
         }}>
-          {oauthAvatar ? (
-            <img src={oauthAvatar} alt="" style={{ width: 56, height: 56, borderRadius: 28, objectFit: 'cover' }} />
-          ) : (
-            <div style={{ width: 56, height: 56, borderRadius: 28, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧑</div>
-          )}
+          <div style={{ width: 56, height: 56, borderRadius: 28, background: C.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧑</div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{displayName}</div>
             <div style={{ fontSize: 12, color: C.n500, marginTop: 2 }}>{profile.complexName}{dongHo ? ` · ${dongHo}` : ''}</div>
-            {oauthEmail && <div style={{ fontSize: 11, color: C.n400, marginTop: 2 }}>{oauthEmail}</div>}
+            {phone && <div style={{ fontSize: 11, color: C.n400, marginTop: 2 }}>{phone}</div>}
           </div>
         </div>
 
@@ -232,7 +235,6 @@ function SettingsScreen({ go }) {
             localStorage.removeItem('jp_plate');
             localStorage.removeItem('jp_complex_name');
             localStorage.removeItem('jp_complex_slug');
-            localStorage.removeItem('jp_phone_verified');
             localStorage.removeItem('jp_phone');
           } catch {}
           try { await window.jp.auth.signOut(); } catch {}

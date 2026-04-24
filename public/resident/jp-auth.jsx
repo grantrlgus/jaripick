@@ -45,33 +45,38 @@ window.jp.auth = {
     return data.user || null;
   },
 
-  async signInWithGoogle() {
-    const c = this._init();
-    if (!c) {
-      alert('로그인 준비 중입니다. 잠시 후 다시 시도해주세요.');
-      return;
-    }
-    const { error } = await c.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + '/resident/' },
-    });
-    if (error) alert('로그인 실패: ' + error.message);
+  // 휴대폰 번호를 E.164 (+8210...) 로 정규화.
+  // 010-1234-5678 / 01012345678 → +821012345678
+  toE164(raw) {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('82')) return '+' + digits;
+    if (digits.startsWith('0')) return '+82' + digits.slice(1);
+    return '+82' + digits;
   },
 
-  async signInWithKakao() {
+  // OTP 발송 — Supabase Auth Phone provider 가 SMS Hook (/api/auth/sms-hook) 으로
+  // 우리 서버를 호출하고, 우리 서버는 SOLAPI 로 실제 발송.
+  async sendOtp(phone) {
     const c = this._init();
-    if (!c) {
-      alert('로그인 준비 중입니다. 잠시 후 다시 시도해주세요.');
-      return;
+    if (!c) return { ok: false, error: '로그인 준비 중입니다. 잠시 후 다시 시도해주세요.' };
+    const e164 = this.toE164(phone);
+    if (!/^\+82\d{9,10}$/.test(e164)) {
+      return { ok: false, error: '휴대폰 번호 형식이 올바르지 않아요' };
     }
-    const { error } = await c.auth.signInWithOAuth({
-      provider: 'kakao',
-      options: {
-        redirectTo: window.location.origin + '/resident/',
-        scopes: 'profile_nickname',
-      },
-    });
-    if (error) alert('로그인 실패: ' + error.message);
+    const { error } = await c.auth.signInWithOtp({ phone: e164 });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  },
+
+  // OTP 검증 → 세션 생성
+  async verifyOtp(phone, code) {
+    const c = this._init();
+    if (!c) return { ok: false, error: '로그인 준비 중입니다.' };
+    const e164 = this.toE164(phone);
+    const { data, error } = await c.auth.verifyOtp({ phone: e164, token: code, type: 'sms' });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, session: data.session };
   },
 
   async signOut() {
