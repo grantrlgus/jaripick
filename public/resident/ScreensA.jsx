@@ -95,8 +95,8 @@ function HomeScreen({ go, state }) {
   const load = React.useCallback(async () => {
     try {
       const [allRounds, cells] = await Promise.all([
-        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const cellById = {};
       (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
@@ -105,7 +105,7 @@ function HomeScreen({ go, state }) {
 
       let hotSpots = [], myBids = [], dday = null;
       if (live) {
-        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
         const perCell = detail?.per_cell || {};
         hotSpots = Object.entries(perCell)
           .map(([cid, e]) => {
@@ -141,7 +141,7 @@ function HomeScreen({ go, state }) {
       let hasAssignment = false, assignment = null;
       if (myKey) {
         for (const r of finalizedList) {
-          const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+          const detail = await window.jp.api.fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
           const perCell = detail?.per_cell || {};
           for (const [cid, e] of Object.entries(perCell)) {
             if (e.top.dong === myKey.dong && e.top.ho === myKey.ho) {

@@ -33,10 +33,10 @@ function NotificationsScreen({ go }) {
       if (!creds.dong || !creds.ho) { setLoading(false); return; }
       const list = [];
       const [rounds, cells, req] = await Promise.all([
-        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
         creds.requestId
-          ? fetch(`/api/residents/requests/${creds.requestId}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+          ? window.jp.api.fetch(`/api/residents/requests/${creds.requestId}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
           : Promise.resolve(null),
       ]);
       const cellById = {};
@@ -59,7 +59,7 @@ function NotificationsScreen({ go }) {
       }
 
       for (const r of (Array.isArray(rounds) ? rounds : [])) {
-        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
         if (!detail) continue;
         const perCell = detail.per_cell || {};
         const myBidsByCell = {};
@@ -260,8 +260,8 @@ function PaymentScreen({ go }) {
     (async () => {
       if (!creds.dong || !creds.ho) { setLoading(false); return; }
       const [payments, cells] = await Promise.all([
-        fetch(`/api/payments?dong=${creds.dong}&ho=${creds.ho}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch(`/api/payments?dong=${creds.dong}&ho=${creds.ho}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const cellById = {};
       (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
@@ -412,14 +412,14 @@ function ReBidCancelScreen({ go, state }) {
     (async () => {
       if (!creds.dong || !creds.ho || !spot) { setLoading(false); return; }
       const [rounds, cells] = await Promise.all([
-        fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
       const cs = Array.isArray(cells) ? cells : [];
       const cell = cs.find(c => c.n === spot);
       if (!live || !cell) { setLoading(false); return; }
-      const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+      const detail = await window.jp.api.fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
       const entry = detail?.per_cell?.[cell.id];
       const mine = (entry?.all || []).filter(b => b.dong === creds.dong && b.ho === creds.ho);
       const myTop = mine.length ? mine.reduce((a, b) => (a.amount > b.amount ? a : b)) : null;
@@ -439,7 +439,7 @@ function ReBidCancelScreen({ go, state }) {
     setCancelling(true);
     setErr('');
     try {
-      const res = await fetch('/api/bids', {
+      const res = await window.jp.api.fetch('/api/bids', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ round_id: data.round.id, cell_id: data.cell.id, dong: creds.dong, ho: creds.ho }),
@@ -667,7 +667,7 @@ function SupportScreen({ go }) {
     if (!creds.dong || !creds.ho) return;
     setLoading(true);
     const qs = new URLSearchParams({ complex: 'heliocity', dong: creds.dong, ho: creds.ho });
-    fetch('/api/complaints?' + qs.toString(), { cache: 'no-store' })
+    window.jp.api.fetch('/api/complaints?' + qs.toString(), { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(d => { if (Array.isArray(d)) setMine(d); })
       .finally(() => setLoading(false));
@@ -679,7 +679,7 @@ function SupportScreen({ go }) {
     if (!title.trim() || !body.trim()) { alert('제목과 본문을 입력해주세요'); return; }
     if (!creds.dong || !creds.ho || !creds.name) { alert('로그인 정보가 없어요'); return; }
     setSending(true);
-    const res = await fetch('/api/complaints', {
+    const res = await window.jp.api.fetch('/api/complaints', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -817,7 +817,7 @@ function SupportThreadInline({ complaintId, creds }) {
 
   const load = React.useCallback(() => {
     const qs = new URLSearchParams({ dong: creds.dong, ho: creds.ho });
-    fetch(`/api/complaints/${complaintId}?` + qs.toString(), { cache: 'no-store' })
+    window.jp.api.fetch(`/api/complaints/${complaintId}?` + qs.toString(), { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null).then(setDetail);
   }, [complaintId, creds.dong, creds.ho]);
   React.useEffect(() => { load(); }, [load]);
@@ -825,7 +825,7 @@ function SupportThreadInline({ complaintId, creds }) {
   const send = async () => {
     if (!reply.trim() || sending) return;
     setSending(true);
-    const res = await fetch(`/api/complaints/${complaintId}`, {
+    const res = await window.jp.api.fetch(`/api/complaints/${complaintId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author_role: 'resident', author_name: creds.name, dong: creds.dong, ho: creds.ho, body: reply.trim() }),

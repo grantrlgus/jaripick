@@ -80,3 +80,24 @@ window.jp.auth = {
     await c.auth.signOut();
   },
 };
+
+// ─── API helper: auto-append ?complex= for resident app calls ─────────
+// 입주민이 가입한 단지(jp_complex_slug)를 모든 API 호출에 자동 부착.
+// /api/apartments/search, /api/residents/match 등 단지 무관한 호출은
+// 이 헬퍼를 거치지 않거나 이미 complex 파라미터가 있으면 그대로 통과.
+window.jp.api = {
+  complex() {
+    try { return localStorage.getItem('jp_complex_slug') || ''; }
+    catch { return ''; }
+  },
+  withComplex(url) {
+    const c = this.complex();
+    if (!c) return url;
+    if (/[?&]complex=/.test(url)) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}complex=${encodeURIComponent(c)}`;
+  },
+  fetch(url, opts) {
+    return fetch(this.withComplex(url), opts);
+  },
+};

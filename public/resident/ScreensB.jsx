@@ -20,16 +20,16 @@ function JPNaverMap({ go }) {
   }, []);
 
   const refetch = React.useCallback(() => {
-    fetch('/api/cells', { cache: 'no-store' })
+    window.jp.api.fetch('/api/cells', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setCells(data.filter(c => c.active !== false)); })
       .catch(() => {});
-    fetch('/api/rounds?status=live', { cache: 'no-store' })
+    window.jp.api.fetch('/api/rounds?status=live', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : [])
       .then(async rounds => {
         const live = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
         if (!live) { setPerCell({}); return; }
-        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
         setPerCell(detail?.per_cell || {});
       })
       .catch(() => {});
@@ -337,8 +337,8 @@ function BidScreen({ go, state }) {
   React.useEffect(() => {
     (async () => {
       const [rounds, cells] = await Promise.all([
-        fetch('/api/rounds?status=live').then(r => r.ok ? r.json() : []),
-        fetch('/api/cells').then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds?status=live').then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells').then(r => r.ok ? r.json() : []),
       ]);
       const liveRound = Array.isArray(rounds) && rounds.length ? rounds[0] : null;
       setRound(liveRound);
@@ -347,7 +347,7 @@ function BidScreen({ go, state }) {
       const matched = cs.find(c => c.n === spot);
       setCell(matched || null);
       if (liveRound && matched) {
-        const detail = await fetch(`/api/rounds/${liveRound.id}`).then(r => r.ok ? r.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${liveRound.id}`).then(r => r.ok ? r.json() : null);
         const entry = detail?.per_cell?.[matched.id];
         const t = entry ? entry.top.amount : 0;
         setTopBid(t);
@@ -362,7 +362,7 @@ function BidScreen({ go, state }) {
   const isTooLow = amount > 0 && amount <= topBid;
 
   const postBid = async (payload) => {
-    const res = await fetch('/api/bids', {
+    const res = await window.jp.api.fetch('/api/bids', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
@@ -499,14 +499,14 @@ function MyBidsScreen({ go }) {
     if (!myKey) { setLoading(false); return; }
     try {
       const [rounds, cells] = await Promise.all([
-        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const cellById = {};
       (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
       const list = [];
       for (const r of (Array.isArray(rounds) ? rounds : [])) {
-        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
         if (!detail) continue;
         const perCell = detail.per_cell || {};
         const myPerCell = {};
@@ -611,14 +611,14 @@ function MySpotCertScreen({ go }) {
     (async () => {
       if (!creds.dong || !creds.ho) { setLoading(false); return; }
       const [rounds, cells] = await Promise.all([
-        fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       const cellById = {};
       (Array.isArray(cells) ? cells : []).forEach(c => { cellById[c.id] = c; });
       const finalized = (Array.isArray(rounds) ? rounds : []).filter(r => r.status === 'finalized');
       for (const r of finalized) {
-        const detail = await fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${r.id}`, { cache: 'no-store' }).then(x => x.ok ? x.json() : null);
         const perCell = detail?.per_cell || {};
         for (const [cid, e] of Object.entries(perCell)) {
           if (e.top.dong === creds.dong && e.top.ho === creds.ho) {
@@ -722,8 +722,8 @@ function SpotDetailScreen({ go, state }) {
     let alive = true;
     (async () => {
       const [cells, rounds] = await Promise.all([
-        fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
-        fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/cells', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        window.jp.api.fetch('/api/rounds?status=live', { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
       ]);
       if (!alive) return;
       const cs = Array.isArray(cells) ? cells : [];
@@ -737,7 +737,7 @@ function SpotDetailScreen({ go, state }) {
         setDday(Math.max(0, Math.ceil(ms / 86400000)));
       }
       if (live && hit) {
-        const detail = await fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+        const detail = await window.jp.api.fetch(`/api/rounds/${live.id}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
         if (!alive) return;
         const e = detail?.per_cell?.[hit.id] || null;
         setEntry(e);

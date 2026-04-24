@@ -59,6 +59,7 @@ export type Database = {
       parking_cells: {
         Row: {
           id: string;
+          complex: string;
           n: string;
           row: string;
           lat: number;
@@ -71,6 +72,7 @@ export type Database = {
         };
         Insert: {
           id: string;
+          complex?: string;
           n: string;
           row: string;
           lat: number;
@@ -82,6 +84,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<{
+          complex: string;
           n: string;
           row: string;
           lat: number;
